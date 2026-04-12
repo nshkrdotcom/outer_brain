@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">OuterBrain logo</title>
+  <desc id="desc">A symmetric hexagonal emblem with a layered neural lattice and central semantic core.</desc>
+  <defs>
+    <linearGradient id="outerBrainShell" x1="34" y1="24" x2="166" y2="176" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFC16B"/>
+      <stop offset="0.48" stop-color="#FF6B9B"/>
+      <stop offset="1" stop-color="#7E7DFF"/>
+    </linearGradient>
+    <linearGradient id="outerBrainTrace" x1="56" y1="48" x2="144" y2="152" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF1D2"/>
+      <stop offset="1" stop-color="#DBD9FF"/>
+    </linearGradient>
+    <radialGradient id="outerBrainAura" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(100 100) rotate(90) scale(72)">
+      <stop offset="0" stop-color="#FF97BF" stop-opacity="0.65"/>
+      <stop offset="1" stop-color="#FF97BF" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="outerBrainShadow" x="15" y="12" width="170" height="176" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#140B17" flood-opacity="0.28"/>
+    </filter>
+    <filter id="outerBrainBloom" x="42" y="38" width="116" height="124" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="4.5" result="blur"/>
+      <feBlend in="SourceGraphic" in2="blur" mode="screen"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#outerBrainShadow)">
+    <path d="M100 20L158.89 54V122L100 156L41.11 122V54L100 20Z" fill="url(#outerBrainAura)"/>
+    <path d="M100 24L155.42 56V120L100 152L44.58 120V56L100 24Z" fill="#14111D" fill-opacity="0.94" stroke="url(#outerBrainShell)" stroke-width="4.5" stroke-linejoin="round"/>
+    <path d="M100 42L140.13 65V111L100 134L59.87 111V65L100 42Z" fill="#191526" stroke="url(#outerBrainTrace)" stroke-width="3.3" stroke-linejoin="round"/>
+    <path d="M100 54L126.85 69.5V100.5L100 116L73.15 100.5V69.5L100 54Z" fill="#171321" stroke="#FFD6E8" stroke-opacity="0.7" stroke-width="2.2" stroke-linejoin="round"/>
+  </g>
+
+  <g filter="url(#outerBrainBloom)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M100 50V126" stroke="url(#outerBrainShell)" stroke-opacity="0.48" stroke-width="1.4"/>
+    <path d="M71 73.5C76.8 66.9 84.9 63.2 94.4 62.4" stroke="#FFDFA5" stroke-opacity="0.78" stroke-width="1.6"/>
+    <path d="M129 73.5C123.2 66.9 115.1 63.2 105.6 62.4" stroke="#FFDFA5" stroke-opacity="0.78" stroke-width="1.6"/>
+    <path d="M67 95C74.9 86.8 85.3 82.2 98.1 81.6" stroke="#FFC6DE" stroke-opacity="0.82" stroke-width="1.7"/>
+    <path d="M133 95C125.1 86.8 114.7 82.2 101.9 81.6" stroke="#FFC6DE" stroke-opacity="0.82" stroke-width="1.7"/>
+    <path d="M70.4 110.5C77.1 116 85.7 119.2 95.8 120.2" stroke="#CFCBFF" stroke-opacity="0.85" stroke-width="1.7"/>
+    <path d="M129.6 110.5C122.9 116 114.3 119.2 104.2 120.2" stroke="#CFCBFF" stroke-opacity="0.85" stroke-width="1.7"/>
+    <path d="M59.87 65L81.2 77.2" stroke="#FFF1D2" stroke-opacity="0.64" stroke-width="1.35"/>
+    <path d="M140.13 65L118.8 77.2" stroke="#FFF1D2" stroke-opacity="0.64" stroke-width="1.35"/>
+    <path d="M59.87 111L81.2 98.8" stroke="#FFF1D2" stroke-opacity="0.64" stroke-width="1.35"/>
+    <path d="M140.13 111L118.8 98.8" stroke="#FFF1D2" stroke-opacity="0.64" stroke-width="1.35"/>
+    <circle cx="100" cy="90.5" r="11.5" fill="#20172A" stroke="#FFF1D2" stroke-width="2"/>
+    <circle cx="100" cy="90.5" r="4.2" fill="#FFB9D6"/>
+    <circle cx="71" cy="73.5" r="3" fill="#17111C" stroke="#FFDFA5" stroke-width="1.2"/>
+    <circle cx="129" cy="73.5" r="3" fill="#17111C" stroke="#FFDFA5" stroke-width="1.2"/>
+    <circle cx="67" cy="95" r="2.8" fill="#17111C" stroke="#FFC6DE" stroke-width="1.2"/>
+    <circle cx="133" cy="95" r="2.8" fill="#17111C" stroke="#FFC6DE" stroke-width="1.2"/>
+    <circle cx="70.4" cy="110.5" r="2.8" fill="#17111C" stroke="#CFCBFF" stroke-width="1.2"/>
+    <circle cx="129.6" cy="110.5" r="2.8" fill="#17111C" stroke="#CFCBFF" stroke-width="1.2"/>
+    <circle cx="81.2" cy="77.2" r="2.4" fill="#FFDFA5"/>
+    <circle cx="118.8" cy="77.2" r="2.4" fill="#FFDFA5"/>
+    <circle cx="81.2" cy="98.8" r="2.4" fill="#CFCBFF"/>
+    <circle cx="118.8" cy="98.8" r="2.4" fill="#CFCBFF"/>
+  </g>
+</svg>
