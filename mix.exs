@@ -1,83 +1,147 @@
-defmodule OuterBrain.MixProject do
+Code.require_file("build_support/workspace_contract.exs", __DIR__)
+
+defmodule OuterBrain.Workspace.MixProject do
   use Mix.Project
+
+  alias OuterBrain.Build.WorkspaceContract
 
   @version "0.1.0"
   @source_url "https://github.com/nshkrdotcom/outer_brain"
-  @description "Starter semantic-runtime repository for context assembly, semantic state, intent synthesis, and restart-safe reply publication above Citadel."
 
   def project do
     [
-      app: :outer_brain,
+      app: :outer_brain_workspace,
       version: @version,
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
+      consolidate_protocols: false,
       deps: deps(),
       aliases: aliases(),
-      description: @description,
-      package: package(),
+      blitz_workspace: blitz_workspace(),
+      dialyzer: dialyzer(),
       docs: docs(),
       source_url: @source_url,
       homepage_url: @source_url,
-      name: "OuterBrain"
+      name: "OuterBrain Workspace",
+      description: "Workspace root for the OuterBrain semantic-runtime monorepo"
     ]
   end
 
   def application do
     [
-      extra_applications: [:logger],
-      mod: {OuterBrain.Application, []}
+      extra_applications: [:logger]
     ]
   end
 
   def cli do
     [
       preferred_envs: [
-        ci: :test
+        ci: :test,
+        "monorepo.test": :test,
+        "monorepo.credo": :test,
+        "monorepo.dialyzer": :test,
+        "monorepo.docs": :dev
       ]
     ]
   end
 
   defp deps do
     [
+      {:blitz, "~> 0.2.0", runtime: false},
+      {:weld, "~> 0.5.0", runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.38", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.40.1", only: :dev, runtime: false}
     ]
   end
 
   defp aliases do
+    monorepo_aliases = [
+      "monorepo.deps.get": ["blitz.workspace deps_get"],
+      "monorepo.format": ["blitz.workspace format"],
+      "monorepo.compile": ["blitz.workspace compile"],
+      "monorepo.test": ["blitz.workspace test"],
+      "monorepo.credo": ["blitz.workspace credo"],
+      "monorepo.dialyzer": ["blitz.workspace dialyzer"],
+      "monorepo.docs": ["blitz.workspace docs"]
+    ]
+
     [
+      "weld.inspect": ["weld.inspect build_support/weld.exs --artifact outer_brain_contracts"],
+      "weld.graph": ["weld.graph build_support/weld.exs --artifact outer_brain_contracts"],
+      "weld.project": ["weld.project build_support/weld.exs --artifact outer_brain_contracts"],
+      "weld.verify": ["weld.verify build_support/weld.exs --artifact outer_brain_contracts"],
       ci: [
-        "format --check-formatted",
-        "compile --warnings-as-errors",
-        "test"
-      ]
+        "deps.get",
+        "monorepo.deps.get",
+        "monorepo.format --check-formatted",
+        "monorepo.compile",
+        "monorepo.test",
+        "monorepo.credo --strict",
+        "monorepo.dialyzer",
+        "monorepo.docs",
+        "weld.verify"
+      ],
+      "docs.root": ["docs"]
+    ] ++ monorepo_aliases
+  end
+
+  defp dialyzer do
+    [
+      plt_add_deps: :apps_direct,
+      plt_add_apps: [:mix, :blitz, :weld]
     ]
   end
 
-  defp package do
+  defp blitz_workspace do
     [
-      licenses: ["MIT"],
-      maintainers: ["nshkrdotcom"],
-      links: %{
-        "GitHub" => @source_url
-      },
-      files: ~w(.formatter.exs CHANGELOG.md LICENSE README.md assets docs lib mix.exs test)
+      root: __DIR__,
+      projects: WorkspaceContract.active_project_globs(),
+      isolation: [
+        deps_path: true,
+        build_path: true,
+        lockfile: true,
+        hex_home: "_build/hex"
+      ],
+      parallelism: [
+        env: "OUTER_BRAIN_MONOREPO_MAX_CONCURRENCY",
+        multiplier: :auto,
+        base: [
+          deps_get: 3,
+          format: 4,
+          compile: 2,
+          test: 2,
+          credo: 2,
+          dialyzer: 1,
+          docs: 1
+        ],
+        overrides: []
+      ],
+      tasks: [
+        deps_get: [args: ["deps.get"], preflight?: false],
+        format: [args: ["format"]],
+        compile: [args: ["compile", "--warnings-as-errors"]],
+        test: [args: ["test"], mix_env: "test", color: true],
+        credo: [args: ["credo"]],
+        dialyzer: [args: ["dialyzer"], mix_env: "test"],
+        docs: [args: ["docs"]]
+      ]
     ]
   end
 
   defp docs do
     [
-      main: "readme",
-      name: "OuterBrain",
+      main: "workspace_readme",
+      name: "OuterBrain Workspace",
       logo: "assets/outer_brain.svg",
       assets: %{"assets" => "assets"},
       source_ref: "main",
       source_url: @source_url,
       homepage_url: @source_url,
       extras: [
-        "README.md",
+        {"README.md", filename: "workspace_readme"},
         "docs/overview.md",
+        "docs/layout.md",
         "docs/runtime_model.md",
         "docs/integration_surface.md",
         "CHANGELOG.md",
@@ -85,7 +149,8 @@ defmodule OuterBrain.MixProject do
       ],
       groups_for_extras: [
         Overview: ["README.md", "docs/overview.md"],
-        Runtime: ["docs/runtime_model.md", "docs/integration_surface.md"],
+        Architecture: ["docs/layout.md", "docs/runtime_model.md"],
+        Integration: ["docs/integration_surface.md"],
         Project: ["CHANGELOG.md", "LICENSE"]
       ]
     ]

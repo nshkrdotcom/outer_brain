@@ -13,38 +13,44 @@
 
 # OuterBrain
 
-OuterBrain is a starter repository for the semantic runtime layer above Citadel.
+OuterBrain is the semantic-runtime workspace above Citadel.
 
-The repository is intentionally light for now. It exists to give the emerging runtime a clear home for semantic journaling, context assembly, intent synthesis, reply publication, and the restart-safe seams that sit above the policy kernel.
+It owns semantic journals, tool-manifest snapshots, prompt and strategy shaping,
+semantic quality checkpoints, live session fencing, and restart-safe reply
+publication.
 
 ## Scope
 
 - raw input normalization
 - semantic state and journaling
 - context assembly
-- structured intent synthesis
-- reply publication and downstream follow-up
+- prompt and strategy shaping
+- structured action-request synthesis
+- provisional and final reply publication
+- restart-safe downstream follow-up
 
 ## Status
 
-Early starter repository. The precise runtime model, package split, and proving examples are still being refined.
+Active workspace buildout. The repo uses a non-umbrella workspace layout with
+core packages, bridges, a host surface, and proving examples.
 
 ## Development
 
-The project targets Elixir `~> 1.19` and Erlang/OTP `28`. The pinned toolchain lives in [`.tool-versions`](./.tool-versions).
+The project targets Elixir `~> 1.19` and Erlang/OTP `28`. The pinned toolchain
+lives in `.tool-versions`.
 
 ```bash
 mix deps.get
-mix test
+mix ci
 ```
 
 ## Documentation
 
-- [docs/overview.md](./docs/overview.md)
-- [docs/runtime_model.md](./docs/runtime_model.md)
-- [docs/integration_surface.md](./docs/integration_surface.md)
-- [CHANGELOG.md](./CHANGELOG.md)
+- `docs/overview.md`
+- `docs/layout.md`
+- `docs/runtime_model.md`
+- `docs/integration_surface.md`
+- `CHANGELOG.md`
 
-## License
-
-MIT. See [LICENSE](./LICENSE).
+This project is licensed under the MIT License.
+(c) 2026 nshkrdotcom. See `LICENSE`.

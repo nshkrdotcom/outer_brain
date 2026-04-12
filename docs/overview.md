@@ -1,14 +1,19 @@
 # Overview
 
-OuterBrain is the starter home for the semantic runtime that sits above
-Citadel.
+OuterBrain is the semantic-runtime workspace that sits above Citadel and below
+host surfaces.
 
-The repository is expected to grow around:
+It owns the language-facing work that should not live in the deterministic
+policy kernel:
 
-- semantic journaling
-- context assembly
-- structured intent synthesis
-- reply publication
-- restart-safe reconciliation at the semantic layer
+- raw ingress journaling
+- semantic-frame reduction
+- context-pack construction
+- tool-manifest snapshots compiled from typed routes
+- quality checkpoints
+- provisional and final reply publication
+- restart-safe semantic recovery
 
-The exact package split is intentionally still flexible.
+The repo is intentionally split into contracts, journal, prompting, quality,
+runtime, restart authority, bridges, and proving examples so semantic authority,
+policy authority, and lower durable execution truth stay separated.

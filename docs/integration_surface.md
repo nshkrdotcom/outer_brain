@@ -1,12 +1,12 @@
 # Integration Surface
 
-OuterBrain should expose a small northbound surface and a disciplined
-southbound surface.
+This repository integrates with:
 
-At a high level:
+- Citadel for structured policy decisions
+- `jido_domain` for typed route input that becomes a durable manifest snapshot
+- `jido_integration` for durable lower runtime facts and restart authority below
+  the semantic layer
+- `ground_plane` projection helpers through a bridge seam
+- host shells and APIs through the `host_surface` app
 
-- northbound callers should see a semantic runtime entrypoint
-- southbound layers should continue to receive structured requests and durable
-  follow-up facts
-
-This document is intentionally generic until the first proving examples land.
+The bridge packages in this workspace keep those seams explicit and replayable.
