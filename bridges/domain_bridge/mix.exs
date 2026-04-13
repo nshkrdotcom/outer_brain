@@ -1,6 +1,9 @@
 defmodule OuterBrain.DomainBridge.MixProject do
   use Mix.Project
 
+  @default_jido_domain_path "/home/home/p/g/n/jido_domain"
+  @jido_domain_path_env "OUTER_BRAIN_JIDO_DOMAIN_PATH"
+
   def project do
     [
       app: :outer_brain_domain_bridge,
@@ -26,6 +29,8 @@ defmodule OuterBrain.DomainBridge.MixProject do
   defp deps do
     [
       {:outer_brain_contracts, path: "../../core/outer_brain_contracts"},
+      {:outer_brain_core, path: "../../core/outer_brain_core"},
+      {:jido_domain, path: jido_domain_path()},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false}
@@ -38,5 +43,9 @@ defmodule OuterBrain.DomainBridge.MixProject do
 
   defp dialyzer do
     [plt_add_deps: :apps_direct]
+  end
+
+  defp jido_domain_path do
+    System.get_env(@jido_domain_path_env, @default_jido_domain_path)
   end
 end

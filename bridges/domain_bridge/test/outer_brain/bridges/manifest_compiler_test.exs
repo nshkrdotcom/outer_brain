@@ -21,4 +21,15 @@ defmodule OuterBrain.Bridges.ManifestCompilerTest do
     assert snapshot.manifest_id == "manifest_1"
     assert Map.has_key?(snapshot.routes, "reply_to_user")
   end
+
+  test "compiles a tool manifest snapshot from jido_domain route sources" do
+    assert {:ok, snapshot} =
+             ManifestCompiler.compile_domain_routes([
+               Jido.Domain.Examples.ProvingGround.Routes.CompileWorkspace
+             ])
+
+    assert snapshot.manifest_id == "manifest_domain"
+    assert snapshot.routes["compile_workspace"].request_type == :command
+    assert snapshot.routes["compile_workspace"].semantic_metadata.category == :workspace
+  end
 end
