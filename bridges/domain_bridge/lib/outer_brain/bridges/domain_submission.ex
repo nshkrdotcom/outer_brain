@@ -1,9 +1,9 @@
 defmodule OuterBrain.Bridges.DomainSubmission do
   @moduledoc """
-  Semantic-turn submission boundary over the typed `jido_domain` seam.
+  Semantic-turn submission boundary over the typed `citadel_domain_surface` seam.
   """
 
-  alias Jido.Domain
+  alias Citadel.DomainSurface, as: Domain
   alias OuterBrain.Bridges.ManifestCompiler
   alias OuterBrain.Contracts.ActionRequest
   alias OuterBrain.Core.{ActionRequestCompiler, SemanticFrame, TurnSelector}

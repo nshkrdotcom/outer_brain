@@ -1,7 +1,7 @@
 defmodule OuterBrain.Bridges.DomainSubmissionTest do
   use ExUnit.Case, async: true
 
-  alias Jido.Domain.Adapters.CitadelAdapter.Accepted
+  alias Citadel.DomainSurface.Adapters.CitadelAdapter.Accepted
   alias OuterBrain.Bridges.DomainSubmission
 
   defmodule FakeKernelRuntime do
@@ -20,7 +20,7 @@ defmodule OuterBrain.Bridges.DomainSubmissionTest do
     end
   end
 
-  test "submits a semantic turn through jido_domain using the typed route boundary" do
+  test "submits a semantic turn through citadel_domain_surface using the typed route boundary" do
     assert {:ok, result} =
              DomainSubmission.submit_turn(
                "compile the workspace",
@@ -32,8 +32,10 @@ defmodule OuterBrain.Bridges.DomainSubmissionTest do
                workspace_root: "/workspace/main",
                idempotency_key: "semantic-turn-1",
                trace_id: "trace/semantic-turn-1",
-               domain_module: Jido.Domain.Examples.ProvingGround,
-               route_sources: [Jido.Domain.Examples.ProvingGround.Routes.CompileWorkspace],
+               domain_module: Citadel.DomainSurface.Examples.ProvingGround,
+               route_sources: [
+                 Citadel.DomainSurface.Examples.ProvingGround.Routes.CompileWorkspace
+               ],
                kernel_runtime: {FakeKernelRuntime, []}
              )
 

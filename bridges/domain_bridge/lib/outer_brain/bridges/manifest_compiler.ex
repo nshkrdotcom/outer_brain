@@ -3,7 +3,7 @@ defmodule OuterBrain.Bridges.ManifestCompiler do
   Compiles a route catalog into a durable manifest snapshot.
   """
 
-  alias Jido.Domain
+  alias Citadel.DomainSurface, as: Domain
   alias OuterBrain.Contracts.ToolManifestSnapshot
 
   @spec compile([map()], keyword()) :: {:ok, ToolManifestSnapshot.t()} | {:error, term()}
