@@ -1,0 +1,373 @@
+{
+  "projection": {
+    "build_path": "/tmp/weld-rollout-20260413/outer_brain/dist/hex/outer_brain_contracts",
+    "copied_files": [
+      ".formatter.exs",
+      "/tmp/weld-rollout-20260413/outer_brain/dist/hex/outer_brain_contracts/components/core/outer_brain_contracts/lib/outer_brain/contracts/action_request.ex",
+      "/tmp/weld-rollout-20260413/outer_brain/dist/hex/outer_brain_contracts/components/core/outer_brain_contracts/lib/outer_brain/contracts/fence.ex",
+      "/tmp/weld-rollout-20260413/outer_brain/dist/hex/outer_brain_contracts/components/core/outer_brain_contracts/lib/outer_brain/contracts/lease.ex",
+      "/tmp/weld-rollout-20260413/outer_brain/dist/hex/outer_brain_contracts/components/core/outer_brain_contracts/lib/outer_brain/contracts/reply_publication.ex",
+      "/tmp/weld-rollout-20260413/outer_brain/dist/hex/outer_brain_contracts/components/core/outer_brain_contracts/lib/outer_brain/contracts/runtime_fact.ex",
+      "/tmp/weld-rollout-20260413/outer_brain/dist/hex/outer_brain_contracts/components/core/outer_brain_contracts/lib/outer_brain/contracts/tool_manifest_snapshot.ex",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "config/config.exs",
+      "config/dev.exs",
+      "config/prod.exs",
+      "config/test.exs",
+      "docs/integration_surface.md",
+      "docs/layout.md",
+      "docs/overview.md",
+      "docs/runtime_model.md",
+      "test/projected_contracts_test.exs",
+      "test/test_helper.exs"
+    ],
+    "package_files": [
+      ".formatter.exs",
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "components/core/outer_brain_contracts",
+      "config",
+      "docs/integration_surface.md",
+      "docs/layout.md",
+      "docs/overview.md",
+      "docs/runtime_model.md",
+      "mix.exs",
+      "projection.lock.json"
+    ],
+    "git_revision": "d8eb798e412a835fde772e82f2608c592e08b5ba",
+    "tree_digest": "676cd192fb09a649fc302ec9fc19eec344a684cb9b03ebb4c6bf7cd078f5a57d"
+  },
+  "manifest": {
+    "path": "/tmp/weld-rollout-20260413/outer_brain/build_support/weld.exs",
+    "digest": "f8335e1587de292db731ea49c350afc689044b523824b6c03c21ac8e73f3a1ce"
+  },
+  "artifact": {
+    "id": "outer_brain_contracts",
+    "package": {
+      "name": "outer_brain_contracts",
+      "version": "0.1.0",
+      "otp_app": "outer_brain_contracts"
+    }
+  },
+  "workspace": {
+    "root": "/tmp/weld-rollout-20260413/outer_brain",
+    "discovery": {
+      "source": "manifest",
+      "project_ids": [
+        ".",
+        "apps/host_surface",
+        "bridges/citadel_bridge",
+        "bridges/domain_bridge",
+        "bridges/ground_plane_projection_bridge",
+        "bridges/publication_bridge",
+        "bridges/review_bridge",
+        "core/outer_brain_contracts",
+        "core/outer_brain_core",
+        "core/outer_brain_journal",
+        "core/outer_brain_prompting",
+        "core/outer_brain_quality",
+        "core/outer_brain_restart_authority",
+        "core/outer_brain_runtime",
+        "examples/console_chat",
+        "examples/direct_citadel_action"
+      ],
+      "adapter": null,
+      "globs": [
+        ".",
+        "apps/*",
+        "bridges/*",
+        "core/*",
+        "examples/*"
+      ],
+      "root_project?": true
+    },
+    "project_count": 16
+  },
+  "graph": {
+    "edges": [
+      {
+        "kind": "runtime",
+        "app": "outer_brain_domain_bridge",
+        "to": "bridges/domain_bridge",
+        "requirement": null,
+        "from": "apps/host_surface"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_publication_bridge",
+        "to": "bridges/publication_bridge",
+        "requirement": null,
+        "from": "apps/host_surface"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_runtime",
+        "to": "core/outer_brain_runtime",
+        "requirement": null,
+        "from": "apps/host_surface"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_contracts",
+        "to": "core/outer_brain_contracts",
+        "requirement": null,
+        "from": "bridges/citadel_bridge"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_core",
+        "to": "core/outer_brain_core",
+        "requirement": null,
+        "from": "bridges/citadel_bridge"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_contracts",
+        "to": "core/outer_brain_contracts",
+        "requirement": null,
+        "from": "bridges/domain_bridge"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_core",
+        "to": "core/outer_brain_core",
+        "requirement": null,
+        "from": "bridges/domain_bridge"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_contracts",
+        "to": "core/outer_brain_contracts",
+        "requirement": null,
+        "from": "bridges/ground_plane_projection_bridge"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_contracts",
+        "to": "core/outer_brain_contracts",
+        "requirement": null,
+        "from": "bridges/publication_bridge"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_journal",
+        "to": "core/outer_brain_journal",
+        "requirement": null,
+        "from": "bridges/publication_bridge"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_quality",
+        "to": "core/outer_brain_quality",
+        "requirement": null,
+        "from": "bridges/review_bridge"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_contracts",
+        "to": "core/outer_brain_contracts",
+        "requirement": null,
+        "from": "core/outer_brain_core"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_journal",
+        "to": "core/outer_brain_journal",
+        "requirement": null,
+        "from": "core/outer_brain_core"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_contracts",
+        "to": "core/outer_brain_contracts",
+        "requirement": null,
+        "from": "core/outer_brain_journal"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_contracts",
+        "to": "core/outer_brain_contracts",
+        "requirement": null,
+        "from": "core/outer_brain_prompting"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_core",
+        "to": "core/outer_brain_core",
+        "requirement": null,
+        "from": "core/outer_brain_prompting"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_contracts",
+        "to": "core/outer_brain_contracts",
+        "requirement": null,
+        "from": "core/outer_brain_quality"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_contracts",
+        "to": "core/outer_brain_contracts",
+        "requirement": null,
+        "from": "core/outer_brain_restart_authority"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_core",
+        "to": "core/outer_brain_core",
+        "requirement": null,
+        "from": "core/outer_brain_restart_authority"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_journal",
+        "to": "core/outer_brain_journal",
+        "requirement": null,
+        "from": "core/outer_brain_restart_authority"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_contracts",
+        "to": "core/outer_brain_contracts",
+        "requirement": null,
+        "from": "core/outer_brain_runtime"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_core",
+        "to": "core/outer_brain_core",
+        "requirement": null,
+        "from": "core/outer_brain_runtime"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_journal",
+        "to": "core/outer_brain_journal",
+        "requirement": null,
+        "from": "core/outer_brain_runtime"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_prompting",
+        "to": "core/outer_brain_prompting",
+        "requirement": null,
+        "from": "core/outer_brain_runtime"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_quality",
+        "to": "core/outer_brain_quality",
+        "requirement": null,
+        "from": "core/outer_brain_runtime"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_host_surface",
+        "to": "apps/host_surface",
+        "requirement": null,
+        "from": "examples/console_chat"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_domain_bridge",
+        "to": "bridges/domain_bridge",
+        "requirement": null,
+        "from": "examples/console_chat"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_publication_bridge",
+        "to": "bridges/publication_bridge",
+        "requirement": null,
+        "from": "examples/console_chat"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_citadel_bridge",
+        "to": "bridges/citadel_bridge",
+        "requirement": null,
+        "from": "examples/direct_citadel_action"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_domain_bridge",
+        "to": "bridges/domain_bridge",
+        "requirement": null,
+        "from": "examples/direct_citadel_action"
+      },
+      {
+        "kind": "runtime",
+        "app": "outer_brain_core",
+        "to": "core/outer_brain_core",
+        "requirement": null,
+        "from": "examples/direct_citadel_action"
+      }
+    ],
+    "digest": "b3de9464a93328fe534f3df6abb50f0ebcd8e837f9148806960d3a6f0b981a38",
+    "excluded_projects": [
+      ".",
+      "apps/host_surface",
+      "bridges/citadel_bridge",
+      "bridges/domain_bridge",
+      "bridges/ground_plane_projection_bridge",
+      "bridges/publication_bridge",
+      "bridges/review_bridge",
+      "core/outer_brain_core",
+      "core/outer_brain_journal",
+      "core/outer_brain_prompting",
+      "core/outer_brain_quality",
+      "core/outer_brain_restart_authority",
+      "core/outer_brain_runtime",
+      "examples/console_chat",
+      "examples/direct_citadel_action"
+    ],
+    "selected_projects": [
+      "core/outer_brain_contracts"
+    ],
+    "violations": []
+  },
+  "verification": [
+    {
+      "env": "dev",
+      "status": "ok",
+      "task": "deps.get"
+    },
+    {
+      "env": "dev",
+      "status": "ok",
+      "task": "deps.compile"
+    },
+    {
+      "env": "dev",
+      "status": "ok",
+      "task": "compile --warnings-as-errors --no-compile-deps"
+    },
+    {
+      "env": "test",
+      "status": "ok",
+      "task": "test",
+      "failure_count": 0,
+      "test_count": 1
+    },
+    {
+      "env": "dev",
+      "status": "ok",
+      "task": "docs --warnings-as-errors"
+    },
+    {
+      "env": "dev",
+      "reason": "artifact_opted_out",
+      "status": "skipped",
+      "task": "hex.build"
+    },
+    {
+      "env": "dev",
+      "reason": "hex_build_disabled",
+      "status": "skipped",
+      "task": "hex.publish --dry-run --yes"
+    }
+  ]
+}
