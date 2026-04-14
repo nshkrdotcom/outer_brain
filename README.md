@@ -44,6 +44,19 @@ mix deps.get
 mix ci
 ```
 
+The welded `outer_brain_contracts` artifact is tracked through the prepared
+bundle flow:
+
+```bash
+mix release.prepare
+mix release.track
+mix release.archive
+```
+
+`mix release.track` updates the orphan-backed
+`projection/outer_brain_contracts` branch so downstream repos can pin a real
+generated-source ref before any formal release boundary exists.
+
 ## Documentation
 
 - `docs/overview.md`
