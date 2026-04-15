@@ -8,6 +8,7 @@ defmodule OuterBrain.JournalTest do
     RecoveryTaskRecord,
     ReplyPublicationRecord,
     SemanticFrameRecord,
+    SemanticJournalEntryRecord,
     ToolManifestRecord
   }
 
@@ -109,6 +110,36 @@ defmodule OuterBrain.JournalTest do
 
     assert [%RecoveryTaskRecord{reason: :ambiguous_submission}] =
              Journal.pending_recovery_tasks(next_state, "session_1")
+  end
+
+  test "semantic journal entries remain append-only and session-scoped" do
+    state = Journal.new()
+
+    assert {:ok, next_state, :recorded} =
+             Journal.transact(state, fn _current ->
+               {:ok,
+                [
+                  Journal.insert(
+                    :semantic_journal_entries,
+                    ok!(
+                      SemanticJournalEntryRecord.new(%{
+                        entry_id: "entry_1",
+                        session_id: "session_1",
+                        causal_unit_id: "causal_1",
+                        entry_type: "wake_input",
+                        recorded_at: DateTime.from_unix!(1_800_000_300),
+                        payload: %{"turn_id" => "turn_1"}
+                      })
+                    )
+                  )
+                ], :recorded}
+             end)
+
+    assert {:ok, %SemanticJournalEntryRecord{entry_type: "wake_input"}} =
+             Journal.fetch(next_state, :semantic_journal_entries, "entry_1")
+
+    assert [%SemanticJournalEntryRecord{entry_id: "entry_1"}] =
+             Journal.all(next_state, :semantic_journal_entries)
   end
 
   defp ok!({:ok, value}), do: value

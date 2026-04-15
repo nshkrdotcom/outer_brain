@@ -15,14 +15,14 @@
 
 OuterBrain is the semantic-runtime workspace above Citadel.
 
-It owns semantic journals, tool-manifest snapshots, prompt and strategy shaping,
-semantic quality checkpoints, live session fencing, and restart-safe reply
-publication.
+It owns durable semantic-session truth, tool-manifest snapshots, prompt and
+strategy shaping, semantic quality checkpoints, live session fencing, and
+restart-safe reply publication.
 
 ## Scope
 
 - raw input normalization
-- semantic state and journaling
+- durable semantic state and journaling
 - context assembly
 - prompt and strategy shaping
 - structured action-request synthesis
@@ -32,7 +32,8 @@ publication.
 ## Status
 
 Active workspace buildout. The repo uses a non-umbrella workspace layout with
-core packages, bridges, a host surface, and proving examples.
+core packages, a dedicated raw-Ecto persistence layer, bridges, a host surface,
+and proving examples.
 
 ## Development
 

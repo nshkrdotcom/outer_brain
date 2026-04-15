@@ -1,11 +1,13 @@
 defmodule OuterBrain.WorkspaceTest do
   use ExUnit.Case, async: true
 
+  alias OuterBrain.Build.WorkspaceContract
   alias OuterBrain.Workspace
   alias OuterBrain.Workspace.MixProject
 
   test "lists workspace packages" do
     assert "core/outer_brain_contracts" in Workspace.package_paths()
+    assert "core/outer_brain_persistence" in Workspace.package_paths()
     assert "bridges/citadel_bridge" in Workspace.package_paths()
     assert "examples/console_chat" in Workspace.package_paths()
   end
@@ -20,16 +22,26 @@ defmodule OuterBrain.WorkspaceTest do
            ]
   end
 
-  test "uses the released Weld 0.7.0 line directly" do
-    assert {:weld, "~> 0.7.0", runtime: false} in MixProject.project()[:deps]
+  test "runtime workspace manifest stays aligned with build support contract" do
+    Code.require_file("build_support/workspace_contract.exs", File.cwd!())
+
+    assert Workspace.package_paths() == WorkspaceContract.package_paths()
+    assert Workspace.active_project_globs() == WorkspaceContract.active_project_globs()
   end
 
-  test "exposes the release aliases for projection tracking" do
+  test "uses the released Weld 0.7.1 line directly" do
+    assert {:weld, "~> 0.7.1", runtime: false} in MixProject.project()[:deps]
+  end
+
+  test "uses Weld task autodiscovery instead of local release aliases" do
     aliases = MixProject.project()[:aliases]
 
-    assert Keyword.fetch!(aliases, :"release.prepare") == ["weld.release.prepare"]
-    assert Keyword.fetch!(aliases, :"release.track") == ["weld.release.track"]
-    assert Keyword.fetch!(aliases, :"release.archive") == ["weld.release.archive"]
+    refute Keyword.has_key?(aliases, :"weld.release.prepare")
+    refute Keyword.has_key?(aliases, :"weld.release.track")
+    refute Keyword.has_key?(aliases, :"weld.release.archive")
+    refute Keyword.has_key?(aliases, :"release.prepare")
+    refute Keyword.has_key?(aliases, :"release.track")
+    refute Keyword.has_key?(aliases, :"release.archive")
   end
 
   test "child packages do not hard-code sibling repo paths" do

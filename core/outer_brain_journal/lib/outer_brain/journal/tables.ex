@@ -4,9 +4,20 @@ defmodule OuterBrain.Journal.Tables do
   """
 
   defmodule SemanticSessionLeaseRecord do
-    @moduledoc false
+    @moduledoc """
+    Durable lease ownership row for a semantic session.
+    """
 
     defstruct [:row_id, :session_id, :holder, :lease_id, :epoch, :expires_at]
+
+    @type t :: %__MODULE__{
+            row_id: String.t(),
+            session_id: String.t(),
+            holder: String.t(),
+            lease_id: String.t(),
+            epoch: non_neg_integer(),
+            expires_at: DateTime.t()
+          }
 
     def new(%{
           row_id: row_id,
@@ -30,6 +41,53 @@ defmodule OuterBrain.Journal.Tables do
     end
 
     def new(_attrs), do: {:error, :invalid_semantic_session_lease_record}
+  end
+
+  defmodule SemanticJournalEntryRecord do
+    @moduledoc """
+    Durable semantic journal row captured for restart and replay analysis.
+    """
+
+    defstruct [:entry_id, :session_id, :causal_unit_id, :entry_type, :recorded_at, payload: %{}]
+
+    @type t :: %__MODULE__{
+            entry_id: String.t(),
+            session_id: String.t(),
+            causal_unit_id: String.t(),
+            entry_type: String.t(),
+            recorded_at: DateTime.t(),
+            payload: map()
+          }
+
+    def new(
+          %{
+            entry_id: entry_id,
+            session_id: session_id,
+            causal_unit_id: causal_unit_id,
+            entry_type: entry_type,
+            recorded_at: %DateTime{} = recorded_at
+          } = attrs
+        )
+        when is_binary(entry_id) and is_binary(session_id) and is_binary(causal_unit_id) and
+               is_binary(entry_type) do
+      payload = Map.get(attrs, :payload, %{})
+
+      if is_map(payload) do
+        {:ok,
+         %__MODULE__{
+           entry_id: entry_id,
+           session_id: session_id,
+           causal_unit_id: causal_unit_id,
+           entry_type: entry_type,
+           recorded_at: recorded_at,
+           payload: payload
+         }}
+      else
+        {:error, :invalid_semantic_journal_entry_record}
+      end
+    end
+
+    def new(_attrs), do: {:error, :invalid_semantic_journal_entry_record}
   end
 
   defmodule SemanticFrameRecord do
@@ -150,9 +208,20 @@ defmodule OuterBrain.Journal.Tables do
   end
 
   defmodule ReplyPublicationRecord do
-    @moduledoc false
+    @moduledoc """
+    Durable publication row describing provisional or final user-facing output.
+    """
 
     defstruct [:publication_id, :causal_unit_id, :phase, :state, :dedupe_key, :body]
+
+    @type t :: %__MODULE__{
+            publication_id: String.t(),
+            causal_unit_id: String.t(),
+            phase: :provisional | :final,
+            state: :pending | :published | :suppressed,
+            dedupe_key: String.t(),
+            body: String.t()
+          }
 
     def new(%{
           publication_id: publication_id,
@@ -181,9 +250,18 @@ defmodule OuterBrain.Journal.Tables do
   end
 
   defmodule RecoveryTaskRecord do
-    @moduledoc false
+    @moduledoc """
+    Durable recovery-work row used by restart authority reconstruction.
+    """
 
     defstruct [:task_id, :session_id, :reason, :status]
+
+    @type t :: %__MODULE__{
+            task_id: String.t(),
+            session_id: String.t(),
+            reason: atom(),
+            status: :pending | :running | :done
+          }
 
     def new(%{task_id: task_id, session_id: session_id, reason: reason, status: status})
         when is_binary(task_id) and is_binary(session_id) and is_atom(reason) and

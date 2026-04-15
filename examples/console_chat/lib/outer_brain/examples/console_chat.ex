@@ -6,18 +6,23 @@ defmodule OuterBrain.Examples.ConsoleChat do
   alias OuterBrain.Bridges.ManifestCompiler
   alias OuterBrain.HostSurface
 
-  @spec run_demo() :: map()
-  def run_demo do
+  @spec run_demo(keyword()) :: map()
+  def run_demo(opts \\ []) do
     Application.ensure_all_started(:outer_brain_host_surface)
 
-    {:ok, _lease_status, lease} =
-      HostSurface.open_session(
-        "session_console",
-        "console_host",
+    session_opts =
+      [
         now: DateTime.from_unix!(1_800_000_800),
         epoch: 1,
         ttl_seconds: 30
-      )
+      ] ++
+        case Keyword.fetch(opts, :lease_store) do
+          {:ok, lease_store} -> [lease_store: lease_store]
+          :error -> []
+        end
+
+    {:ok, _lease_status, lease} =
+      HostSurface.open_session("session_console", "console_host", session_opts)
 
     {:ok, snapshot} =
       ManifestCompiler.compile(

@@ -6,6 +6,7 @@ Key groups:
 
 - `core/outer_brain_contracts`
 - `core/outer_brain_journal`
+- `core/outer_brain_persistence`
 - `core/outer_brain_core`
 - `core/outer_brain_prompting`
 - `core/outer_brain_quality`

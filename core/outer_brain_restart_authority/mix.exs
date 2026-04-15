@@ -27,6 +27,7 @@ defmodule OuterBrain.RestartAuthority.MixProject do
     [
       {:outer_brain_contracts, path: "../outer_brain_contracts"},
       {:outer_brain_journal, path: "../outer_brain_journal"},
+      {:outer_brain_persistence, path: "../outer_brain_persistence"},
       {:outer_brain_core, path: "../outer_brain_core"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

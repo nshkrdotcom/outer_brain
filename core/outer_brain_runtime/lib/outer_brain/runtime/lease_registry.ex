@@ -1,6 +1,6 @@
 defmodule OuterBrain.Runtime.LeaseRegistry do
   @moduledoc """
-  Agent-backed lease registry used to prove fenced semantic-session ownership.
+  Agent-backed mirror of the canonical semantic-session lease owner.
   """
 
   use Agent
@@ -44,6 +44,11 @@ defmodule OuterBrain.Runtime.LeaseRegistry do
         lease -> Fence.from_lease(lease)
       end
     end)
+  end
+
+  @spec mirror(Agent.agent(), Lease.t()) :: :ok
+  def mirror(agent, %Lease{} = lease) do
+    Agent.update(agent, &Map.put(&1, lease.session_id, lease))
   end
 
   defp handle_competing_lease(state, session_id, current, candidate, now) do

@@ -14,6 +14,7 @@ policy kernel:
 - provisional and final reply publication
 - restart-safe semantic recovery
 
-The repo is intentionally split into contracts, journal, prompting, quality,
-runtime, restart authority, bridges, and proving examples so semantic authority,
-policy authority, and lower durable execution truth stay separated.
+The repo is intentionally split into contracts, journal, raw-Ecto persistence,
+prompting, quality, runtime, restart authority, bridges, and proving examples
+so semantic authority, policy authority, and lower durable execution truth stay
+separated.

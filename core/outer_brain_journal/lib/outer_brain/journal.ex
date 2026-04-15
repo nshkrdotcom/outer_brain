@@ -10,6 +10,7 @@ defmodule OuterBrain.Journal do
     RecoveryTaskRecord,
     ReplyPublicationRecord,
     SemanticFrameRecord,
+    SemanticJournalEntryRecord,
     SemanticSessionLeaseRecord,
     StrategyProfileRecord,
     ToolManifestRecord
@@ -17,6 +18,7 @@ defmodule OuterBrain.Journal do
 
   @type table ::
           :semantic_session_leases
+          | :semantic_journal_entries
           | :semantic_frames
           | :context_packs
           | :strategy_profiles
@@ -29,6 +31,7 @@ defmodule OuterBrain.Journal do
 
   @tables [
     :semantic_session_leases,
+    :semantic_journal_entries,
     :semantic_frames,
     :context_packs,
     :strategy_profiles,
@@ -94,6 +97,7 @@ defmodule OuterBrain.Journal do
   defp phase_rank(:provisional), do: 1
 
   defp record_id(:semantic_session_leases, %SemanticSessionLeaseRecord{row_id: id}), do: id
+  defp record_id(:semantic_journal_entries, %SemanticJournalEntryRecord{entry_id: id}), do: id
   defp record_id(:semantic_frames, %SemanticFrameRecord{frame_id: id}), do: id
   defp record_id(:context_packs, %ContextPackRecord{context_pack_id: id}), do: id
   defp record_id(:strategy_profiles, %StrategyProfileRecord{strategy_profile_id: id}), do: id
