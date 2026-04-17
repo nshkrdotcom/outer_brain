@@ -1,59 +1,213 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" fill="none" role="img" aria-labelledby="title desc">
-  <title id="title">OuterBrain logo</title>
-  <desc id="desc">A symmetric hexagonal emblem with a layered neural lattice and central semantic core.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" fill="none" role="img" aria-labelledby="ob-title ob-desc">
+  <title id="ob-title">OuterBrain logo</title>
+  <desc id="ob-desc">A crystalline hexagonal emblem representing a semantic-runtime workspace — faceted prism geometry with a pulsing thought-core.</desc>
   <defs>
-    <linearGradient id="outerBrainShell" x1="34" y1="24" x2="166" y2="176" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFC16B"/>
-      <stop offset="0.48" stop-color="#FF6B9B"/>
-      <stop offset="1" stop-color="#7E7DFF"/>
-    </linearGradient>
-    <linearGradient id="outerBrainTrace" x1="56" y1="48" x2="144" y2="152" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFF1D2"/>
-      <stop offset="1" stop-color="#DBD9FF"/>
-    </linearGradient>
-    <radialGradient id="outerBrainAura" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(100 100) rotate(90) scale(72)">
-      <stop offset="0" stop-color="#FF97BF" stop-opacity="0.65"/>
-      <stop offset="1" stop-color="#FF97BF" stop-opacity="0"/>
+    <!-- Hex clip path — perfect regular hexagon, tightly fitted -->
+    <clipPath id="obHexClip">
+      <polygon points="100,4 176.6,48 176.6,136 100,180 23.4,136 23.4,48"/>
+    </clipPath>
+
+    <!-- Background: deep cosmic midnight -->
+    <radialGradient id="obBgRadial" cx="100" cy="92" r="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0B1628"/>
+      <stop offset="0.55" stop-color="#060D1A"/>
+      <stop offset="1" stop-color="#020408"/>
     </radialGradient>
-    <filter id="outerBrainShadow" x="15" y="12" width="170" height="176" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#140B17" flood-opacity="0.28"/>
+
+    <!-- Outer shell bevel gradient -->
+    <linearGradient id="obShellBevel" x1="23" y1="30" x2="177" y2="170" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3EFFD4" stop-opacity="0.9"/>
+      <stop offset="0.35" stop-color="#0FA18A" stop-opacity="0.6"/>
+      <stop offset="0.65" stop-color="#0C7D8F" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#6BE4FF" stop-opacity="0.85"/>
+    </linearGradient>
+
+    <!-- Inner prism face gradients -->
+    <linearGradient id="obFaceLeft" x1="40" y1="60" x2="100" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#14FFD0" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#0A3D4E" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="obFaceRight" x1="160" y1="60" x2="100" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6BE4FF" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#0A2D3E" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="obFaceTop" x1="100" y1="20" x2="100" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3EFFD4" stop-opacity="0.14"/>
+      <stop offset="1" stop-color="#061520" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Core glow -->
+    <radialGradient id="obCoreGlow" cx="100" cy="88" r="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3EFFD4" stop-opacity="0.55"/>
+      <stop offset="0.4" stop-color="#14C8B0" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#0A3040" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Core orb gradient -->
+    <radialGradient id="obCoreOrb" cx="97" cy="84" r="14" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#B0FFF0"/>
+      <stop offset="0.35" stop-color="#3EFFD4"/>
+      <stop offset="0.7" stop-color="#0FA18A"/>
+      <stop offset="1" stop-color="#064A48"/>
+    </radialGradient>
+
+    <!-- Ring gradient -->
+    <linearGradient id="obRingGrad" x1="78" y1="70" x2="122" y2="106" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6BE4FF" stop-opacity="0.7"/>
+      <stop offset="0.5" stop-color="#3EFFD4" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#14FFD0" stop-opacity="0.3"/>
+    </linearGradient>
+
+    <!-- Lattice line gradient -->
+    <linearGradient id="obLattice" x1="50" y1="50" x2="150" y2="140" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3EFFD4" stop-opacity="0.4"/>
+      <stop offset="0.5" stop-color="#6BE4FF" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#14FFD0" stop-opacity="0.35"/>
+    </linearGradient>
+
+    <!-- Ambient haze -->
+    <radialGradient id="obHaze" cx="100" cy="92" r="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#14FFD0" stop-opacity="0.08"/>
+      <stop offset="0.5" stop-color="#0C7D8F" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Fine grid pattern -->
+    <pattern id="obGrid" x="0" y="0" width="16" height="16" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="16" y2="0" stroke="#3EFFD4" stroke-opacity="0.04" stroke-width="0.5"/>
+      <line x1="0" y1="0" x2="0" y2="16" stroke="#3EFFD4" stroke-opacity="0.04" stroke-width="0.5"/>
+    </pattern>
+
+    <!-- Filters -->
+    <filter id="obDropShadow" x="-20%" y="-15%" width="140%" height="145%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000D14" flood-opacity="0.55"/>
     </filter>
-    <filter id="outerBrainBloom" x="42" y="38" width="116" height="124" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="4.5" result="blur"/>
-      <feBlend in="SourceGraphic" in2="blur" mode="screen"/>
+    <filter id="obInnerGlow" x="-30%" y="-30%" width="160%" height="160%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="6" result="glow"/>
+      <feBlend in="SourceGraphic" in2="glow" mode="screen"/>
+    </filter>
+    <filter id="obSoftBloom" x="-50%" y="-50%" width="200%" height="200%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="3.5" result="b"/>
+      <feBlend in="SourceGraphic" in2="b" mode="screen"/>
+    </filter>
+    <filter id="obNodeGlow" x="-100%" y="-100%" width="300%" height="300%" filterUnits="objectBoundingBox" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="2"/>
     </filter>
   </defs>
 
-  <g filter="url(#outerBrainShadow)">
-    <path d="M100 20L158.89 54V122L100 156L41.11 122V54L100 20Z" fill="url(#outerBrainAura)"/>
-    <path d="M100 24L155.42 56V120L100 152L44.58 120V56L100 24Z" fill="#14111D" fill-opacity="0.94" stroke="url(#outerBrainShell)" stroke-width="4.5" stroke-linejoin="round"/>
-    <path d="M100 42L140.13 65V111L100 134L59.87 111V65L100 42Z" fill="#191526" stroke="url(#outerBrainTrace)" stroke-width="3.3" stroke-linejoin="round"/>
-    <path d="M100 54L126.85 69.5V100.5L100 116L73.15 100.5V69.5L100 54Z" fill="#171321" stroke="#FFD6E8" stroke-opacity="0.7" stroke-width="2.2" stroke-linejoin="round"/>
-  </g>
+  <!-- Everything clipped to the hexagon -->
+  <g clip-path="url(#obHexClip)">
 
-  <g filter="url(#outerBrainBloom)" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M100 50V126" stroke="url(#outerBrainShell)" stroke-opacity="0.48" stroke-width="1.4"/>
-    <path d="M71 73.5C76.8 66.9 84.9 63.2 94.4 62.4" stroke="#FFDFA5" stroke-opacity="0.78" stroke-width="1.6"/>
-    <path d="M129 73.5C123.2 66.9 115.1 63.2 105.6 62.4" stroke="#FFDFA5" stroke-opacity="0.78" stroke-width="1.6"/>
-    <path d="M67 95C74.9 86.8 85.3 82.2 98.1 81.6" stroke="#FFC6DE" stroke-opacity="0.82" stroke-width="1.7"/>
-    <path d="M133 95C125.1 86.8 114.7 82.2 101.9 81.6" stroke="#FFC6DE" stroke-opacity="0.82" stroke-width="1.7"/>
-    <path d="M70.4 110.5C77.1 116 85.7 119.2 95.8 120.2" stroke="#CFCBFF" stroke-opacity="0.85" stroke-width="1.7"/>
-    <path d="M129.6 110.5C122.9 116 114.3 119.2 104.2 120.2" stroke="#CFCBFF" stroke-opacity="0.85" stroke-width="1.7"/>
-    <path d="M59.87 65L81.2 77.2" stroke="#FFF1D2" stroke-opacity="0.64" stroke-width="1.35"/>
-    <path d="M140.13 65L118.8 77.2" stroke="#FFF1D2" stroke-opacity="0.64" stroke-width="1.35"/>
-    <path d="M59.87 111L81.2 98.8" stroke="#FFF1D2" stroke-opacity="0.64" stroke-width="1.35"/>
-    <path d="M140.13 111L118.8 98.8" stroke="#FFF1D2" stroke-opacity="0.64" stroke-width="1.35"/>
-    <circle cx="100" cy="90.5" r="11.5" fill="#20172A" stroke="#FFF1D2" stroke-width="2"/>
-    <circle cx="100" cy="90.5" r="4.2" fill="#FFB9D6"/>
-    <circle cx="71" cy="73.5" r="3" fill="#17111C" stroke="#FFDFA5" stroke-width="1.2"/>
-    <circle cx="129" cy="73.5" r="3" fill="#17111C" stroke="#FFDFA5" stroke-width="1.2"/>
-    <circle cx="67" cy="95" r="2.8" fill="#17111C" stroke="#FFC6DE" stroke-width="1.2"/>
-    <circle cx="133" cy="95" r="2.8" fill="#17111C" stroke="#FFC6DE" stroke-width="1.2"/>
-    <circle cx="70.4" cy="110.5" r="2.8" fill="#17111C" stroke="#CFCBFF" stroke-width="1.2"/>
-    <circle cx="129.6" cy="110.5" r="2.8" fill="#17111C" stroke="#CFCBFF" stroke-width="1.2"/>
-    <circle cx="81.2" cy="77.2" r="2.4" fill="#FFDFA5"/>
-    <circle cx="118.8" cy="77.2" r="2.4" fill="#FFDFA5"/>
-    <circle cx="81.2" cy="98.8" r="2.4" fill="#CFCBFF"/>
-    <circle cx="118.8" cy="98.8" r="2.4" fill="#CFCBFF"/>
+    <!-- Drop shadow layer (drawn behind) -->
+    <g filter="url(#obDropShadow)">
+      <!-- Background fill -->
+      <polygon points="100,4 176.6,48 176.6,136 100,180 23.4,136 23.4,48" fill="url(#obBgRadial)"/>
+    </g>
+
+    <!-- Subtle grid texture -->
+    <polygon points="100,4 176.6,48 176.6,136 100,180 23.4,136 23.4,48" fill="url(#obGrid)"/>
+
+    <!-- Ambient haze -->
+    <polygon points="100,4 176.6,48 176.6,136 100,180 23.4,136 23.4,48" fill="url(#obHaze)"/>
+
+    <!-- ===== Faceted prism geometry ===== -->
+    <!-- Left facet -->
+    <polygon points="100,92 23.4,48 23.4,136" fill="url(#obFaceLeft)"/>
+    <!-- Right facet -->
+    <polygon points="100,92 176.6,48 176.6,136" fill="url(#obFaceRight)"/>
+    <!-- Top facet -->
+    <polygon points="100,92 23.4,48 100,4 176.6,48" fill="url(#obFaceTop)"/>
+
+    <!-- Facet edge lines -->
+    <g stroke="#3EFFD4" stroke-opacity="0.18" stroke-width="0.7" stroke-linecap="round">
+      <line x1="100" y1="92" x2="23.4" y2="48"/>
+      <line x1="100" y1="92" x2="176.6" y2="48"/>
+      <line x1="100" y1="92" x2="100" y2="4"/>
+      <line x1="100" y1="92" x2="23.4" y2="136"/>
+      <line x1="100" y1="92" x2="176.6" y2="136"/>
+      <line x1="100" y1="92" x2="100" y2="180"/>
+    </g>
+
+    <!-- ===== Thought-lattice network ===== -->
+    <g stroke="url(#obLattice)" stroke-width="0.9" stroke-linecap="round" fill="none" filter="url(#obSoftBloom)">
+      <!-- Radial spokes -->
+      <line x1="100" y1="88" x2="62" y2="56"/>
+      <line x1="100" y1="88" x2="138" y2="56"/>
+      <line x1="100" y1="88" x2="50" y2="92"/>
+      <line x1="100" y1="88" x2="150" y2="92"/>
+      <line x1="100" y1="88" x2="62" y2="124"/>
+      <line x1="100" y1="88" x2="138" y2="124"/>
+      <!-- Cross connections -->
+      <line x1="62" y1="56" x2="50" y2="92"/>
+      <line x1="138" y1="56" x2="150" y2="92"/>
+      <line x1="50" y1="92" x2="62" y2="124"/>
+      <line x1="150" y1="92" x2="138" y2="124"/>
+      <line x1="62" y1="56" x2="138" y2="56"/>
+      <line x1="62" y1="124" x2="138" y2="124"/>
+    </g>
+
+    <!-- ===== Concentric orbital rings ===== -->
+    <g fill="none" stroke="url(#obRingGrad)" stroke-linecap="round">
+      <ellipse cx="100" cy="88" rx="42" ry="42" stroke-width="0.8" stroke-dasharray="4 6" stroke-opacity="0.3"/>
+      <ellipse cx="100" cy="88" rx="30" ry="30" stroke-width="1.0" stroke-dasharray="3 5" stroke-opacity="0.4"/>
+      <ellipse cx="100" cy="88" rx="20" ry="20" stroke-width="1.2" stroke-opacity="0.5"/>
+    </g>
+
+    <!-- ===== Thought-particle nodes ===== -->
+    <!-- Outer ring nodes -->
+    <g filter="url(#obNodeGlow)">
+      <circle cx="62" cy="56" r="3.2" fill="#0B1628" stroke="#3EFFD4" stroke-width="1.1" stroke-opacity="0.8"/>
+      <circle cx="138" cy="56" r="3.2" fill="#0B1628" stroke="#3EFFD4" stroke-width="1.1" stroke-opacity="0.8"/>
+      <circle cx="50" cy="92" r="3.0" fill="#0B1628" stroke="#6BE4FF" stroke-width="1.1" stroke-opacity="0.7"/>
+      <circle cx="150" cy="92" r="3.0" fill="#0B1628" stroke="#6BE4FF" stroke-width="1.1" stroke-opacity="0.7"/>
+      <circle cx="62" cy="124" r="3.2" fill="#0B1628" stroke="#14FFD0" stroke-width="1.1" stroke-opacity="0.75"/>
+      <circle cx="138" cy="124" r="3.2" fill="#0B1628" stroke="#14FFD0" stroke-width="1.1" stroke-opacity="0.75"/>
+    </g>
+    <!-- Inner bright dots on nodes -->
+    <circle cx="62" cy="56" r="1.3" fill="#3EFFD4" opacity="0.85"/>
+    <circle cx="138" cy="56" r="1.3" fill="#3EFFD4" opacity="0.85"/>
+    <circle cx="50" cy="92" r="1.1" fill="#6BE4FF" opacity="0.8"/>
+    <circle cx="150" cy="92" r="1.1" fill="#6BE4FF" opacity="0.8"/>
+    <circle cx="62" cy="124" r="1.3" fill="#14FFD0" opacity="0.8"/>
+    <circle cx="138" cy="124" r="1.3" fill="#14FFD0" opacity="0.8"/>
+
+    <!-- Micro satellite nodes -->
+    <circle cx="80" cy="68" r="1.5" fill="#3EFFD4" opacity="0.5"/>
+    <circle cx="120" cy="68" r="1.5" fill="#3EFFD4" opacity="0.5"/>
+    <circle cx="72" cy="104" r="1.4" fill="#6BE4FF" opacity="0.45"/>
+    <circle cx="128" cy="104" r="1.4" fill="#6BE4FF" opacity="0.45"/>
+
+    <!-- ===== Central semantic core ===== -->
+    <!-- Soft wide glow -->
+    <circle cx="100" cy="88" r="36" fill="url(#obCoreGlow)"/>
+
+    <!-- Core halo ring -->
+    <circle cx="100" cy="88" r="16" fill="none" stroke="#3EFFD4" stroke-width="1.4" stroke-opacity="0.35" filter="url(#obInnerGlow)"/>
+
+    <!-- Core orb -->
+    <circle cx="100" cy="88" r="10" fill="url(#obCoreOrb)" filter="url(#obSoftBloom)"/>
+
+    <!-- Core specular highlight -->
+    <ellipse cx="97" cy="84" rx="4.5" ry="3.5" fill="#B0FFF0" opacity="0.45"/>
+
+    <!-- Core pinpoint -->
+    <circle cx="100" cy="88" r="2.5" fill="#DDFFF8" opacity="0.9"/>
+
+    <!-- ===== Outer hexagonal border ===== -->
+    <!-- Double-stroke metallic border -->
+    <polygon points="100,4 176.6,48 176.6,136 100,180 23.4,136 23.4,48"
+             fill="none" stroke="url(#obShellBevel)" stroke-width="3.0" stroke-linejoin="round"/>
+    <polygon points="100,7 174,49.7 174,134.3 100,177 26,134.3 26,49.7"
+             fill="none" stroke="#3EFFD4" stroke-width="0.6" stroke-opacity="0.25" stroke-linejoin="round"/>
+
+    <!-- Edge highlight accents at vertices -->
+    <g fill="#3EFFD4" opacity="0.6">
+      <circle cx="100" cy="4" r="2.2"/>
+      <circle cx="176.6" cy="48" r="2.0"/>
+      <circle cx="176.6" cy="136" r="2.0"/>
+      <circle cx="100" cy="180" r="2.2"/>
+      <circle cx="23.4" cy="136" r="2.0"/>
+      <circle cx="23.4" cy="48" r="2.0"/>
+    </g>
   </g>
 </svg>
