@@ -29,7 +29,7 @@ defmodule OuterBrain.Persistence.MixProject do
   defp deps do
     [
       {:ecto_sql, "~> 3.13"},
-      {:postgrex, "~> 0.19"},
+      {:postgrex, "~> 0.22"},
       {:jason, "~> 1.4"},
       {:outer_brain_contracts, path: "../outer_brain_contracts"},
       {:outer_brain_journal, path: "../outer_brain_journal"},

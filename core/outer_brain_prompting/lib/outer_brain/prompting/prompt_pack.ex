@@ -24,8 +24,14 @@ defmodule OuterBrain.Prompting.PromptPack do
   @spec build_from_frame(struct(), ToolManifestSnapshot.t(), atom(), [String.t()]) ::
           {:ok, map()} | {:error, term()}
   def build_from_frame(frame, %ToolManifestSnapshot{} = snapshot, strategy_name, refs) do
+    build_from_frame(frame, snapshot, strategy_name, refs, [])
+  end
+
+  @spec build_from_frame(struct(), ToolManifestSnapshot.t(), atom(), [String.t()], keyword()) ::
+          {:ok, map()} | {:error, term()}
+  def build_from_frame(frame, %ToolManifestSnapshot{} = snapshot, strategy_name, refs, opts) do
     frame
-    |> ContextPack.build(refs)
+    |> ContextPack.build(refs, opts)
     |> build(snapshot, strategy_name)
   end
 end
