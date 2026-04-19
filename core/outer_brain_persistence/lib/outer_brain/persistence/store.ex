@@ -5,7 +5,7 @@ defmodule OuterBrain.Persistence.Store do
 
   import Ecto.Query
 
-  alias OuterBrain.Contracts.{Fence, Lease}
+  alias OuterBrain.Contracts.{Fence, Lease, SemanticFailure}
 
   alias OuterBrain.Journal.Tables.{
     RecoveryTaskRecord,
@@ -21,6 +21,8 @@ defmodule OuterBrain.Persistence.Store do
     SemanticJournalEntry,
     SemanticSessionLease
   }
+
+  @semantic_failure_entry_type "semantic_failure"
 
   @spec acquire_lease(Lease.t(), DateTime.t(), keyword()) ::
           {:ok, :acquired | :renewed, Lease.t()} | {:error, term()}
@@ -126,18 +128,69 @@ defmodule OuterBrain.Persistence.Store do
     case repo.insert(changeset,
            on_conflict: [
              set: [
-               phase: publication.phase,
                state: publication.state,
-               dedupe_key: publication.dedupe_key,
                body: publication.body,
                updated_at: DateTime.utc_now()
              ]
            ],
-           conflict_target: :publication_id
+           conflict_target: :dedupe_key,
+           returning: true
          ) do
-      {:ok, _schema} -> {:ok, publication}
+      {:ok, schema} -> {:ok, schema_to_reply_publication(schema)}
       {:error, changeset} -> {:error, changeset}
     end
+  end
+
+  @spec reply_publications(String.t(), keyword()) :: [ReplyPublicationRecord.t()]
+  def reply_publications(causal_unit_id, opts \\ []) when is_binary(causal_unit_id) do
+    repo = repo(opts)
+
+    ReplyPublication
+    |> where([publication], publication.causal_unit_id == ^causal_unit_id)
+    |> order_by([publication], asc: publication.inserted_at, asc: publication.publication_id)
+    |> repo.all()
+    |> Enum.map(&schema_to_reply_publication/1)
+  end
+
+  @spec record_semantic_failure(SemanticFailure.t(), keyword()) ::
+          {:ok, SemanticFailure.t()} | {:error, term()}
+  def record_semantic_failure(%SemanticFailure{} = failure, opts \\ []) do
+    repo = repo(opts)
+    recorded_at = Keyword.get(opts, :recorded_at, DateTime.utc_now())
+    payload = SemanticFailure.to_payload(failure)
+
+    changeset =
+      SemanticJournalEntry.changeset(%SemanticJournalEntry{}, %{
+        entry_id: SemanticFailure.journal_entry_id(failure),
+        session_id: failure.semantic_session_id,
+        causal_unit_id: failure.causal_unit_id,
+        entry_type: @semantic_failure_entry_type,
+        payload: payload,
+        recorded_at: recorded_at
+      })
+
+    case repo.insert(changeset,
+           on_conflict: [set: [payload: payload, recorded_at: recorded_at]],
+           conflict_target: :entry_id,
+           returning: true
+         ) do
+      {:ok, schema} -> SemanticFailure.from_payload(schema.payload)
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  @spec semantic_failure_entries(String.t(), keyword()) :: [SemanticFailure.t()]
+  def semantic_failure_entries(session_id, opts \\ []) when is_binary(session_id) do
+    repo = repo(opts)
+
+    SemanticJournalEntry
+    |> where(
+      [entry],
+      entry.session_id == ^session_id and entry.entry_type == ^@semantic_failure_entry_type
+    )
+    |> order_by([entry], asc: entry.recorded_at, asc: entry.inserted_at)
+    |> repo.all()
+    |> Enum.map(&semantic_failure_from_schema!/1)
   end
 
   @spec latest_publication_phase(String.t(), keyword()) :: :final | :provisional | nil
@@ -256,6 +309,27 @@ defmodule OuterBrain.Persistence.Store do
       reason: String.to_existing_atom(schema.reason),
       status: schema.status
     }
+  end
+
+  defp schema_to_reply_publication(schema) do
+    %ReplyPublicationRecord{
+      publication_id: schema.publication_id,
+      causal_unit_id: schema.causal_unit_id,
+      phase: schema.phase,
+      state: schema.state,
+      dedupe_key: schema.dedupe_key,
+      body: schema.body
+    }
+  end
+
+  defp semantic_failure_from_schema!(schema) do
+    case SemanticFailure.from_payload(schema.payload) do
+      {:ok, failure} ->
+        failure
+
+      {:error, reason} ->
+        raise ArgumentError, "invalid semantic failure payload: #{inspect(reason)}"
+    end
   end
 
   defp repo(opts), do: Keyword.get(opts, :repo, Repo)

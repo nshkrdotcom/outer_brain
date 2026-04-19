@@ -2,7 +2,6 @@ defmodule OuterBrain.Persistence.StoreTest do
   use ExUnit.Case, async: false
 
   alias Ecto.Adapters.SQL.Sandbox
-  alias Ecto.Migrator
   alias OuterBrain.Contracts.Lease
 
   alias OuterBrain.Journal.Tables.{
@@ -18,7 +17,7 @@ defmodule OuterBrain.Persistence.StoreTest do
 
     {:ok, _pid} = Repo.start_link(PostgresContainer.repo_config(container.port))
 
-    Migrator.run(Repo, PostgresContainer.migrations_path(), :up, all: true, log: false)
+    PostgresContainer.run_migrations!(Repo)
     Sandbox.mode(Repo, :manual)
 
     on_exit(fn ->

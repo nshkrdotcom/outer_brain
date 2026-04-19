@@ -13,11 +13,13 @@
 
 # OuterBrain
 
-OuterBrain is the semantic-runtime workspace above Citadel.
+OuterBrain is the provider-neutral semantic-runtime gateway above Citadel.
 
 It owns durable semantic-session truth, tool-manifest snapshots, prompt and
-strategy shaping, semantic quality checkpoints, live session fencing, and
-restart-safe reply publication.
+strategy shaping, semantic quality checkpoints, live session fencing,
+provider-neutral semantic failure carriers, and restart-safe reply publication.
+It does not own provider memory, RAG engines, or model-specific cognition as
+platform truth.
 
 ## Scope
 
@@ -25,6 +27,7 @@ restart-safe reply publication.
 - durable semantic state and journaling
 - context assembly
 - prompt and strategy shaping
+- provider-neutral semantic failure normalization
 - structured action-request synthesis
 - provisional and final reply publication
 - restart-safe downstream follow-up

@@ -4,6 +4,32 @@ defmodule OuterBrain.Bridges.DomainSubmissionTest do
   alias Citadel.DomainSurface.Adapters.CitadelAdapter.Accepted
   alias OuterBrain.Bridges.DomainSubmission
 
+  defmodule GhostRoute do
+    @moduledoc false
+
+    alias Citadel.DomainSurface.Route
+
+    @behaviour Route
+
+    def definition do
+      Route.definition!(
+        name: :ghost_route,
+        request_type: :command,
+        operation: :ghost_route,
+        dispatch_via: :kernel_runtime,
+        version: "1.0.0",
+        description: "Route declared in the semantic manifest but absent from the domain module",
+        orchestration: :stateless_sync,
+        semantic_metadata: %{category: :workspace, intent: "ghost route", tags: [:ghost]},
+        tool_manifest: %{
+          summary: "Exercise unavailable route handling",
+          examples: [%{workspace_id: "workspace/main"}],
+          stability: :stable
+        }
+      )
+    end
+  end
+
   defmodule FakeKernelRuntime do
     @moduledoc false
 
@@ -44,5 +70,59 @@ defmodule OuterBrain.Bridges.DomainSubmissionTest do
     assert %Accepted{} = result.dispatch_result
     assert result.dispatch_result.request_id == "semantic-turn-1"
     assert result.manifest_id == "manifest_domain"
+  end
+
+  test "emits a provider-neutral semantic failure carrier for semantic selection ambiguity" do
+    assert {:error, {:semantic_failure, carrier}} =
+             DomainSubmission.submit_turn(
+               "do something useful later",
+               session_id: "session-semantic-2",
+               tenant_id: "tenant-semantic",
+               actor_id: "actor-semantic",
+               environment: "dev",
+               scope_id: "workspace/main",
+               workspace_root: "/workspace/main",
+               idempotency_key: "semantic-turn-2",
+               trace_id: "trace/semantic-turn-2",
+               domain_module: Citadel.DomainSurface.Examples.ProvingGround,
+               route_sources: [
+                 Citadel.DomainSurface.Examples.ProvingGround.Routes.CompileWorkspace,
+                 Citadel.DomainSurface.Examples.ProvingGround.Routes.WorkspaceStatus
+               ],
+               kernel_runtime: {FakeKernelRuntime, []}
+             )
+
+    assert carrier.kind == :semantic_insufficient_context
+    assert carrier.retry_class == :clarification_required
+    assert carrier.tenant_id == "tenant-semantic"
+    assert carrier.semantic_session_id == "session-semantic-2"
+    assert carrier.causal_unit_id == "semantic-turn-2"
+    assert carrier.request_trace_id == "trace/semantic-turn-2"
+    assert [%{"surface" => "outer_brain.domain_submission"}] = carrier.provenance
+  end
+
+  test "emits a semantic tool-mismatch carrier when the selected route is absent from the domain module" do
+    assert {:error, {:semantic_failure, carrier}} =
+             DomainSubmission.submit_turn(
+               "route this ghost request",
+               session_id: "session-semantic-3",
+               tenant_id: "tenant-semantic",
+               actor_id: "actor-semantic",
+               environment: "dev",
+               scope_id: "workspace/main",
+               workspace_root: "/workspace/main",
+               idempotency_key: "semantic-turn-3",
+               trace_id: "trace/semantic-turn-3",
+               domain_module: Citadel.DomainSurface.Examples.ProvingGround,
+               route_sources: [GhostRoute],
+               kernel_runtime: {FakeKernelRuntime, []}
+             )
+
+    assert carrier.kind == :semantic_tool_mismatch
+    assert carrier.retry_class == :repairable
+    assert carrier.tenant_id == "tenant-semantic"
+    assert carrier.semantic_session_id == "session-semantic-3"
+    assert carrier.causal_unit_id == "semantic-turn-3"
+    assert carrier.request_trace_id == "trace/semantic-turn-3"
   end
 end

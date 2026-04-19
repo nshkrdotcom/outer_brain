@@ -60,6 +60,17 @@ defmodule OuterBrain.Persistence.PostgresContainer do
     Path.expand("../priv/repo/migrations", __DIR__)
   end
 
+  def run_migrations!(repo) do
+    previous_options = Code.compiler_options()
+    Code.compiler_options(ignore_module_conflict: true)
+
+    try do
+      Ecto.Migrator.run(repo, migrations_path(), :up, all: true, log: false)
+    after
+      Code.compiler_options(previous_options)
+    end
+  end
+
   defp host_port!(container_id) do
     {output, 0} =
       System.cmd("docker", ["port", container_id, "5432/tcp"], stderr_to_stdout: true)

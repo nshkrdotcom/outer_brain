@@ -33,95 +33,130 @@ defmodule OuterBrain.Prompting.ContextPack do
   end
 
   defp fetch_source_report(base_pack, source, context_bindings, opts) do
-    source_ref = fetch_value(source, :source_ref)
-    binding_key = fetch_value(source, :binding_key)
-    usage_phase = fetch_value(source, :usage_phase)
-    required? = fetch_value(source, :required?) || false
-    schema_ref = fetch_value(source, :schema_ref)
-    max_fragments = fetch_value(source, :max_fragments) || 5
-    merge_strategy = fetch_value(source, :merge_strategy) || :append
-    runtime_binding = Map.get(context_bindings, binding_key)
+    config = source_report_config(source, context_bindings)
+    report = base_source_report(config)
 
-    report = %{
-      source_ref: source_ref,
+    cond do
+      is_nil(base_pack.trace_id) ->
+        %{report | error: :missing_trace_id}
+
+      not is_map(config.runtime_binding) ->
+        %{report | error: :binding_not_found}
+
+      true ->
+        fetch_bound_source_report(base_pack, config, report, opts)
+    end
+  end
+
+  defp source_report_config(source, context_bindings) do
+    binding_key = fetch_value(source, :binding_key)
+
+    %{
+      source_ref: fetch_value(source, :source_ref),
       binding_key: binding_key,
-      usage_phase: usage_phase,
-      required?: required?,
-      schema_ref: schema_ref,
-      merge_strategy: merge_strategy,
+      usage_phase: fetch_value(source, :usage_phase),
+      required?: fetch_value(source, :required?) || false,
+      schema_ref: fetch_value(source, :schema_ref),
+      max_fragments: fetch_value(source, :max_fragments) || 5,
+      merge_strategy: fetch_value(source, :merge_strategy) || :append,
+      timeout_ms: fetch_value(source, :timeout_ms) || 1_000,
+      runtime_binding: Map.get(context_bindings, binding_key)
+    }
+  end
+
+  defp base_source_report(config) do
+    %{
+      source_ref: config.source_ref,
+      binding_key: config.binding_key,
+      usage_phase: config.usage_phase,
+      required?: config.required?,
+      schema_ref: config.schema_ref,
+      merge_strategy: config.merge_strategy,
       status: :degraded,
       adapter_key: nil,
       fragment_count: 0,
       error: nil,
       fragments: []
     }
+  end
 
-    cond do
-      is_nil(base_pack.trace_id) ->
-        %{report | error: :missing_trace_id}
+  defp fetch_bound_source_report(base_pack, config, report, opts) do
+    runtime_binding = config.runtime_binding
+    adapter_key = fetch_value(runtime_binding, :adapter_key)
+    timeout_ms = fetch_value(runtime_binding, :timeout_ms) || config.timeout_ms
 
-      not is_map(runtime_binding) ->
-        %{report | error: :binding_not_found}
+    case ContextAdapterRegistry.resolve(runtime_binding, opts) do
+      {:ok, adapter} ->
+        do_fetch_bound_source_report(base_pack, config, report, adapter, adapter_key, timeout_ms)
 
-      true ->
-        adapter_key = fetch_value(runtime_binding, :adapter_key)
-
-        timeout_ms =
-          fetch_value(runtime_binding, :timeout_ms) || fetch_value(source, :timeout_ms) || 1_000
-
-        case ContextAdapterRegistry.resolve(runtime_binding, opts) do
-          {:ok, adapter} ->
-            request =
-              base_pack
-              |> Map.take([
-                :session_id,
-                :objective,
-                :unresolved_questions,
-                :commitments,
-                :refs,
-                :mode,
-                :trace_id
-              ])
-              |> Map.merge(%{
-                source_ref: source_ref,
-                binding_key: binding_key,
-                usage_phase: usage_phase,
-                schema_ref: schema_ref,
-                max_fragments: max_fragments
-              })
-
-            case fetch_fragments(adapter, request, runtime_binding, timeout_ms) do
-              {:ok, fragments} ->
-                normalized_fragments =
-                  fragments
-                  |> Enum.take(max_fragments)
-                  |> Enum.map(
-                    &normalize_fragment!(&1, source_ref, binding_key, adapter_key, schema_ref)
-                  )
-
-                %{
-                  report
-                  | adapter_key: adapter_key,
-                    status:
-                      if(required? and normalized_fragments == [], do: :degraded, else: :ok),
-                    fragment_count: length(normalized_fragments),
-                    error:
-                      if(required? and normalized_fragments == [],
-                        do: :required_fragment_missing,
-                        else: nil
-                      ),
-                    fragments: normalized_fragments
-                }
-
-              {:error, reason} ->
-                %{report | adapter_key: adapter_key, error: reason}
-            end
-
-          {:error, reason} ->
-            %{report | adapter_key: adapter_key, error: reason}
-        end
+      {:error, reason} ->
+        %{report | adapter_key: adapter_key, error: reason}
     end
   end
+
+  defp do_fetch_bound_source_report(base_pack, config, report, adapter, adapter_key, timeout_ms) do
+    request = context_source_request(base_pack, config)
+
+    case fetch_fragments(adapter, request, config.runtime_binding, timeout_ms) do
+      {:ok, fragments} ->
+        fragments
+        |> normalize_source_fragments(config, adapter_key)
+        |> successful_source_report(report, config, adapter_key)
+
+      {:error, reason} ->
+        %{report | adapter_key: adapter_key, error: reason}
+    end
+  end
+
+  defp context_source_request(base_pack, config) do
+    base_pack
+    |> Map.take([
+      :session_id,
+      :objective,
+      :unresolved_questions,
+      :commitments,
+      :refs,
+      :mode,
+      :trace_id
+    ])
+    |> Map.merge(%{
+      source_ref: config.source_ref,
+      binding_key: config.binding_key,
+      usage_phase: config.usage_phase,
+      schema_ref: config.schema_ref,
+      max_fragments: config.max_fragments
+    })
+  end
+
+  defp normalize_source_fragments(fragments, config, adapter_key) do
+    fragments
+    |> Enum.take(config.max_fragments)
+    |> Enum.map(
+      &normalize_fragment!(
+        &1,
+        config.source_ref,
+        config.binding_key,
+        adapter_key,
+        config.schema_ref
+      )
+    )
+  end
+
+  defp successful_source_report(normalized_fragments, report, config, adapter_key) do
+    {status, error} = fragment_report_status(config.required?, normalized_fragments)
+
+    %{
+      report
+      | adapter_key: adapter_key,
+        status: status,
+        fragment_count: length(normalized_fragments),
+        error: error,
+        fragments: normalized_fragments
+    }
+  end
+
+  defp fragment_report_status(true, []), do: {:degraded, :required_fragment_missing}
+  defp fragment_report_status(_required?, _fragments), do: {:ok, nil}
 
   defp fetch_fragments(adapter, request, runtime_binding, timeout_ms) do
     task = Task.async(fn -> adapter.fetch_fragments(request, runtime_binding) end)

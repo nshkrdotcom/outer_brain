@@ -38,3 +38,17 @@ The semantic lowering path is now:
 
 This keeps `outer_brain` responsible for semantic selection and packaging, not
 for durable lower-truth ownership.
+
+## Semantic Failure Surface
+
+Provider-neutral failures cross the boundary as
+`OuterBrain.Contracts.SemanticFailure` carriers. Domain submission emits those
+carriers for deterministic semantic selection failures such as clarification
+required, stale manifest/context, unavailable route/tool, or invalid semantic
+output. AppKit and Mezzanine preserve the carrier as data while continuing to
+make lifecycle decisions from the coarse deterministic `:semantic_failure`
+class.
+
+Context adapters are read-only contributors to context-pack assembly. They
+receive bounded request data and runtime binding configuration, return
+provenance-bearing fragments, and do not own semantic-session truth.

@@ -41,6 +41,26 @@ defmodule OuterBrain.Prompting.ContextPackTest do
     end
   end
 
+  defmodule ReadOnlyProbeAdapter do
+    @behaviour OuterBrain.Prompting.ContextAdapter
+
+    @impl true
+    def fetch_fragments(request, runtime_binding) do
+      send(runtime_binding["test_pid"], {:context_adapter_request, request, runtime_binding})
+
+      {:ok,
+       [
+         %{
+           fragment_id: "fragment-read-only",
+           content: %{"summary" => "Read-only workspace fact"},
+           provenance: %{"external_system_ref" => "memory://workspace/main"},
+           staleness: %{"class" => "fresh"},
+           metadata: %{"rank" => 1}
+         }
+       ]}
+    end
+  end
+
   test "builds a context pack with bounded adapter fragments and provenance" do
     frame =
       "session_alpha"
@@ -158,6 +178,63 @@ defmodule OuterBrain.Prompting.ContextPackTest do
     assert timeout_pack.fragments == []
     assert hd(timeout_pack.context_sources).status == :degraded
     assert hd(timeout_pack.context_sources).error == :timeout
+  end
+
+  test "context adapters receive a read-only request and preserve provenance" do
+    frame = SemanticFrame.seed("session_gamma", "answer with retrieved context")
+
+    pack =
+      ContextPack.build(
+        frame,
+        ["turn_1"],
+        trace_id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        context_sources: [
+          %{
+            source_ref: "workspace_memory",
+            binding_key: "shared_memory",
+            usage_phase: :retrieval,
+            required?: true,
+            timeout_ms: 20,
+            schema_ref: "context/workspace_memory",
+            max_fragments: 1
+          }
+        ],
+        context_bindings: %{
+          "shared_memory" => %{
+            "adapter_key" => "read_only_probe",
+            "config" => %{"workspace" => "main"},
+            "test_pid" => self()
+          }
+        },
+        adapter_registry: %{"read_only_probe" => ReadOnlyProbeAdapter}
+      )
+
+    assert_receive {:context_adapter_request, request, runtime_binding}
+
+    assert Enum.sort(Map.keys(request)) == [
+             :binding_key,
+             :commitments,
+             :max_fragments,
+             :mode,
+             :objective,
+             :refs,
+             :schema_ref,
+             :session_id,
+             :source_ref,
+             :trace_id,
+             :unresolved_questions,
+             :usage_phase
+           ]
+
+    refute Map.has_key?(request, :write_intent)
+    refute Map.has_key?(request, :mutation)
+    assert runtime_binding["config"] == %{"workspace" => "main"}
+
+    assert [fragment] = pack.fragments
+    assert fragment.provenance["source_ref"] == "workspace_memory"
+    assert fragment.provenance["binding_key"] == "shared_memory"
+    assert fragment.provenance["adapter_key"] == "read_only_probe"
+    assert fragment.provenance["external_system_ref"] == "memory://workspace/main"
   end
 
   defp stringify_keys(map) do
