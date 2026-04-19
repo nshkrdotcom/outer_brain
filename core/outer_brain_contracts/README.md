@@ -34,6 +34,10 @@ payload engine:
   diagnostics refs, validation state, retry/terminal class, and bounded routing
   facts. Raw prompts, provider-native bodies, context packs, artifacts, and
   execution logs are rejected.
+- `OuterBrain.SemanticActivityPayloadBoundary.v1` is implemented by
+  `OuterBrain.Contracts.NormalizedSemanticResult` for Phase 4 durable workflow
+  activity returns. It preserves the same normalization and quarantine rules
+  while exposing the M29 workflow-facing contract name.
 - `Platform.PrivacyRedactionFixture.v1` is implemented by
   `OuterBrain.Contracts.PrivacyRedactionFixture` for the Outer Brain side of
   public DTO, incident, and search-attribute redaction proof.

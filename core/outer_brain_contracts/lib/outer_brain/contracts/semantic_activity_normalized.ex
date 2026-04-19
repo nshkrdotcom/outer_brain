@@ -209,3 +209,49 @@ defmodule OuterBrain.Contracts.SemanticActivityNormalized do
     )
   end
 end
+
+defmodule OuterBrain.Contracts.NormalizedSemanticResult do
+  @moduledoc """
+  M29-facing semantic activity payload boundary contract.
+
+  This module keeps the public durable-workflow contract name stable while
+  reusing the underlying normalizer validation. The returned payload is limited
+  to semantic refs, hashes, provenance refs, diagnostics refs, validation state,
+  retry/terminal class, and bounded routing facts.
+  """
+
+  alias OuterBrain.Contracts.SemanticActivityNormalized
+
+  @contract_name "OuterBrain.SemanticActivityPayloadBoundary.v1"
+
+  @spec contract_name() :: String.t()
+  def contract_name, do: @contract_name
+
+  @spec new(map() | SemanticActivityNormalized.t()) ::
+          {:ok, SemanticActivityNormalized.t()} | {:error, term()}
+  def new(attrs) do
+    with {:ok, normalized} <- SemanticActivityNormalized.new(attrs) do
+      {:ok, %{normalized | contract_name: @contract_name}}
+    end
+  end
+
+  @spec workflow_history_payload(map() | SemanticActivityNormalized.t()) ::
+          {:ok, map()} | {:error, term()}
+  def workflow_history_payload(attrs) do
+    with {:ok, normalized} <- new(attrs) do
+      {:ok,
+       normalized.workflow_history_payload
+       |> Map.put(:contract_name, @contract_name)}
+    end
+  end
+
+  @spec validation_states() :: [SemanticActivityNormalized.validation_state()]
+  def validation_states, do: SemanticActivityNormalized.validation_states()
+
+  @spec quarantine_state?(term()) :: boolean()
+  def quarantine_state?(state), do: SemanticActivityNormalized.quarantine_state?(state)
+
+  @spec classify_normalization_condition(atom()) :: :diagnostic | :review_or_reask | :quarantine
+  def classify_normalization_condition(condition),
+    do: SemanticActivityNormalized.classify_normalization_condition(condition)
+end

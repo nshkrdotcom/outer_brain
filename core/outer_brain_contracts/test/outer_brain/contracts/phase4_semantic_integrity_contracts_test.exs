@@ -3,6 +3,7 @@ defmodule OuterBrain.Contracts.Phase4SemanticIntegrityContractsTest do
 
   alias OuterBrain.Contracts.{
     ContextAdapterReadOnly,
+    NormalizedSemanticResult,
     PrivacyRedactionFixture,
     SemanticActivityNormalized,
     SemanticContextProvenance,
@@ -188,6 +189,23 @@ defmodule OuterBrain.Contracts.Phase4SemanticIntegrityContractsTest do
              })
   end
 
+  test "normalized semantic result exposes the M29 workflow payload boundary contract" do
+    assert NormalizedSemanticResult.contract_name() ==
+             "OuterBrain.SemanticActivityPayloadBoundary.v1"
+
+    assert {:ok, result} = NormalizedSemanticResult.new(normalized_semantic_attrs())
+    assert result.contract_name == "OuterBrain.SemanticActivityPayloadBoundary.v1"
+    assert result.routing_facts.review_required == false
+    refute Map.has_key?(result.workflow_history_payload, :normalized_summary)
+    refute Map.has_key?(result.workflow_history_payload, :raw_provider_body)
+
+    assert {:ok, history_payload} =
+             NormalizedSemanticResult.workflow_history_payload(normalized_semantic_attrs())
+
+    assert history_payload.contract_name == "OuterBrain.SemanticActivityPayloadBoundary.v1"
+    assert history_payload.routing_facts.semantic_score == 0.94
+  end
+
   test "normalization states separate diagnostics, review, recoverable failure, and quarantine" do
     assert SemanticActivityNormalized.quarantine_state?(:semantic_security_quarantine)
     assert SemanticActivityNormalized.quarantine_state?(:semantic_integrity_quarantine)
@@ -206,6 +224,11 @@ defmodule OuterBrain.Contracts.Phase4SemanticIntegrityContractsTest do
 
     assert :quarantine ==
              SemanticActivityNormalized.classify_normalization_condition(:tenant_mismatch)
+
+    assert :diagnostic ==
+             NormalizedSemanticResult.classify_normalization_condition(:unknown_provider_keys)
+
+    refute NormalizedSemanticResult.quarantine_state?(:low_confidence)
   end
 
   test "privacy redaction fixture forbids raw prompts, provider payloads, and search attribute leaks" do
@@ -287,5 +310,46 @@ defmodule OuterBrain.Contracts.Phase4SemanticIntegrityContractsTest do
              |> SuppressionVisibility.to_map()
              |> Map.put(:recovery_action_refs, [])
              |> SuppressionVisibility.new()
+  end
+
+  defp normalized_semantic_attrs do
+    %{
+      tenant_ref: "tenant:alpha",
+      installation_ref: "installation:prod",
+      workspace_ref: "workspace:ops",
+      project_ref: "project:control-room",
+      environment_ref: "environment:prod",
+      system_actor_ref: "system:outer-brain",
+      resource_ref: "semantic-activity:activity-1",
+      authority_packet_ref: "authority:packet-4",
+      permission_decision_ref: "permission:decision-4",
+      idempotency_key: "semantic-activity:activity-1",
+      trace_id: "trace-semantic-4",
+      correlation_id: "correlation-semantic-4",
+      release_manifest_ref: "phase4-v6-m29",
+      semantic_ref: "semantic:result-4",
+      context_hash: "sha256:context",
+      provenance_refs: ["provenance:adapter-1"],
+      provider_ref: "provider:anthropic",
+      model_ref: "model:claude",
+      claim_check_refs: ["claim:prompt-1", "claim:provider-output-1"],
+      normalized_summary: %{title: "Policy answer", body_ref: "summary:semantic-4"},
+      routing_facts: %{
+        review_required: false,
+        semantic_score: 0.94,
+        confidence_band: "high",
+        risk_band: "low",
+        schema_validation_state: "valid",
+        normalization_warning_count: 0,
+        semantic_retry_class: "none",
+        terminal_class: "none",
+        review_reason_code: "none"
+      },
+      validation_state: :valid,
+      diagnostics_ref: "diagnostics:semantic-4",
+      retry_class: :none,
+      terminal_class: :none,
+      normalizer_version: "outer-brain-normalizer@1"
+    }
   end
 end
