@@ -13,6 +13,13 @@ The runtime loop is:
 7. normalize lower facts into a single wake path
 8. recover or reconcile from durable evidence after restart
 
+Phase 4 semantic activities return normalized semantic results, not provider
+payloads. Workflow history may carry semantic refs, context hashes, provenance
+refs, diagnostics refs, validation state, retry/terminal class, and bounded
+routing facts such as review requirement, score, confidence band, risk band, and
+retry class. Raw prompts, provider-native bodies, raw context packs, artifacts,
+and execution logs stay in Outer Brain or claim-check storage.
+
 Citadel remains the policy kernel beneath this layer, and `jido_integration`
 remains the durable lower execution owner.
 

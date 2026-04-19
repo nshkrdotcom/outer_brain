@@ -1,10 +1,48 @@
 # OuterBrain Contracts
 
 Pure contracts for fenced semantic sessions, manifest snapshots, action
-requests, runtime facts, semantic failure carriers, and reply publication state.
+requests, runtime facts, semantic failure carriers, reply publication state, and
+Phase 4 semantic integrity payloads.
 
 `OuterBrain.Contracts.SemanticFailure` is the provider-neutral failure carrier
 used at the semantic-runtime boundary. It carries deterministic failure kind,
 retry class, tenant/session/trace/causal identity, provenance, optional provider
 reference, and operator-facing message without allowing Mezzanine or AppKit to
 branch on provider-specific semantics.
+
+## Phase 4 Semantic Integrity Contracts
+
+Milestone 7 adds the release-grade contracts that keep Outer Brain a
+provider-neutral semantic gateway instead of a provider-memory or workflow
+payload engine:
+
+- `OuterBrain.SemanticContextProvenance.v1` is implemented by
+  `OuterBrain.Contracts.SemanticContextProvenance`. It requires tenant,
+  installation, workspace, project, environment, actor, resource, authority,
+  idempotency, trace, semantic refs, provider/model refs, prompt/context hashes,
+  claim-check refs, normalizer version, provenance refs, and redaction policy.
+- `OuterBrain.SemanticDuplicateSuppression.v1` is implemented by
+  `OuterBrain.Contracts.SemanticDuplicateSuppression`. It requires deterministic
+  semantic idempotency, duplicate lineage, routing-fact hash, publication ref,
+  reason code, and operator-visible suppression evidence.
+- `OuterBrain.ContextAdapterReadOnly.v1` is implemented by
+  `OuterBrain.Contracts.ContextAdapterReadOnly`. It allows explicit read sets
+  and denied write resources, and rejects any mutation permission grant.
+- `OuterBrain.SemanticActivityNormalized.v1` is implemented by
+  `OuterBrain.Contracts.SemanticActivityNormalized`. It returns compact workflow
+  history payloads containing semantic refs, context hash, provenance refs,
+  diagnostics refs, validation state, retry/terminal class, and bounded routing
+  facts. Raw prompts, provider-native bodies, context packs, artifacts, and
+  execution logs are rejected.
+- `Platform.PrivacyRedactionFixture.v1` is implemented by
+  `OuterBrain.Contracts.PrivacyRedactionFixture` for the Outer Brain side of
+  public DTO, incident, and search-attribute redaction proof.
+- `Platform.SuppressionVisibility.v1` is implemented by
+  `OuterBrain.Contracts.SuppressionVisibility` for the Outer Brain suppression
+  producer side of operator-visible suppression and quarantine proof.
+
+Semantic activities must return workflow-visible routing facts such as
+`review_required`, `semantic_score`, `confidence_band`, `risk_band`,
+`schema_validation_state`, `normalization_warning_count`,
+`semantic_retry_class`, `terminal_class`, and `review_reason_code`. Returning
+only a claim-check ref is rejected when workflow routing depends on those facts.

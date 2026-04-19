@@ -28,6 +28,8 @@ platform truth.
 - context assembly
 - prompt and strategy shaping
 - provider-neutral semantic failure normalization
+- normalized semantic activity contracts with bounded routing facts
+- semantic context provenance, duplicate suppression, and redaction evidence
 - structured action-request synthesis
 - provisional and final reply publication
 - restart-safe downstream follow-up
