@@ -91,7 +91,8 @@ defmodule OuterBrain.Bridges.DomainSubmission do
          {:ok, request_id} <- required_string(opts, :idempotency_key),
          {:ok, domain_module} <- required_atom(opts, :domain_module),
          {:ok, route_sources} <- required_route_sources(opts),
-         {:ok, trace_id} <- required_string(opts, :trace_id) do
+         {:ok, trace_id} <- required_string(opts, :trace_id),
+         {:ok, canonical_idempotency_key} <- optional_string(opts, :canonical_idempotency_key) do
       context =
         %{
           session_id: session_id,
@@ -131,7 +132,8 @@ defmodule OuterBrain.Bridges.DomainSubmission do
            Keyword.take(opts, [:kernel_runtime, :external_integration]) ++
              Keyword.get(opts, :route_opts, []),
          tenant_id: Keyword.get(opts, :tenant_id),
-         trace_id: trace_id
+         trace_id: trace_id,
+         canonical_idempotency_key: canonical_idempotency_key
        }}
     end
   end
@@ -139,15 +141,20 @@ defmodule OuterBrain.Bridges.DomainSubmission do
   defp semantic_failure_result(reason, normalized) do
     kind = semantic_failure_kind(reason)
 
-    SemanticFailure.new(%{
+    %{
       kind: kind,
       tenant_id: normalized.tenant_id || "unknown-tenant",
       semantic_session_id: normalized.session_id,
       causal_unit_id: normalized.request_id,
       request_trace_id: normalized.trace_id,
+      canonical_idempotency_key: normalized.canonical_idempotency_key,
+      idempotency_alias: normalized.request_id,
       provenance: [%{"surface" => "outer_brain.domain_submission"}],
       operator_message: semantic_failure_message(kind, reason)
-    })
+    }
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
+    |> SemanticFailure.new()
     |> case do
       {:ok, failure} -> {:error, {:semantic_failure, failure}}
       {:error, failure_reason} -> {:error, failure_reason}
@@ -184,6 +191,14 @@ defmodule OuterBrain.Bridges.DomainSubmission do
     case Keyword.get(opts, key) do
       value when is_binary(value) and value != "" -> {:ok, value}
       _other -> {:error, {:missing_option, key}}
+    end
+  end
+
+  defp optional_string(opts, key) do
+    case Keyword.get(opts, key) do
+      nil -> {:ok, nil}
+      value when is_binary(value) and value != "" -> {:ok, value}
+      _other -> {:error, {:invalid_option, key}}
     end
   end
 

@@ -19,6 +19,10 @@ defmodule OuterBrain.Contracts.SemanticFailure do
   ]
 
   @retry_classes [:retryable, :repairable, :clarification_required, :terminal]
+  @journal_entry_prefix "semantic_failure_journal:v1:"
+  @legacy_journal_entry_prefix "semantic_failure"
+  @idempotency_alias_prefix "semantic_failure_idempotency_alias:v1:"
+  @payload_hash_prefix "sha256:"
 
   defstruct [
     :kind,
@@ -29,6 +33,8 @@ defmodule OuterBrain.Contracts.SemanticFailure do
     :request_trace_id,
     :substrate_trace_id,
     :context_hash,
+    :canonical_idempotency_key,
+    :idempotency_alias,
     :provider_ref,
     :operator_message,
     provenance: []
@@ -57,6 +63,8 @@ defmodule OuterBrain.Contracts.SemanticFailure do
           substrate_trace_id: String.t() | nil,
           provenance: [map()],
           context_hash: String.t() | nil,
+          canonical_idempotency_key: String.t() | nil,
+          idempotency_alias: String.t(),
           provider_ref: map() | nil,
           operator_message: String.t()
         }
@@ -89,8 +97,22 @@ defmodule OuterBrain.Contracts.SemanticFailure do
          {:ok, substrate_trace_id} <- optional_string(source, :substrate_trace_id),
          {:ok, provenance} <- provenance(source),
          {:ok, context_hash} <- optional_string(source, :context_hash),
+         {:ok, canonical_idempotency_key} <- optional_string(source, :canonical_idempotency_key),
+         {:ok, idempotency_alias} <- optional_string(source, :idempotency_alias),
          {:ok, provider_ref} <- optional_map(source, :provider_ref),
          {:ok, operator_message} <- required_string(source, :operator_message) do
+      idempotency_alias =
+        idempotency_alias ||
+          default_idempotency_alias(
+            tenant_id,
+            semantic_session_id,
+            causal_unit_id,
+            kind,
+            request_trace_id,
+            substrate_trace_id,
+            context_hash
+          )
+
       {:ok,
        %__MODULE__{
          kind: kind,
@@ -102,6 +124,8 @@ defmodule OuterBrain.Contracts.SemanticFailure do
          substrate_trace_id: substrate_trace_id,
          provenance: provenance,
          context_hash: context_hash,
+         canonical_idempotency_key: canonical_idempotency_key,
+         idempotency_alias: idempotency_alias,
          provider_ref: provider_ref,
          operator_message: operator_message
        }}
@@ -125,6 +149,8 @@ defmodule OuterBrain.Contracts.SemanticFailure do
       "substrate_trace_id" => failure.substrate_trace_id,
       "provenance" => failure.provenance,
       "context_hash" => failure.context_hash,
+      "canonical_idempotency_key" => failure.canonical_idempotency_key,
+      "idempotency_alias" => failure.idempotency_alias,
       "provider_ref" => failure.provider_ref,
       "operator_message" => failure.operator_message
     }
@@ -142,6 +168,8 @@ defmodule OuterBrain.Contracts.SemanticFailure do
       substrate_trace_id: failure.substrate_trace_id,
       provenance: failure.provenance,
       context_hash: failure.context_hash,
+      canonical_idempotency_key: failure.canonical_idempotency_key,
+      idempotency_alias: failure.idempotency_alias,
       provider_ref: failure.provider_ref,
       operator_message: failure.operator_message
     }
@@ -149,13 +177,94 @@ defmodule OuterBrain.Contracts.SemanticFailure do
 
   @spec journal_entry_id(t()) :: String.t()
   def journal_entry_id(%__MODULE__{} = failure) do
+    @journal_entry_prefix <> sha256(canonical_json(journal_identity_payload(failure)))
+  end
+
+  @spec journal_identity_payload(t()) :: map()
+  def journal_identity_payload(%__MODULE__{} = failure) do
+    idempotency_ref = failure.canonical_idempotency_key || failure.idempotency_alias
+
+    %{
+      "tenant_id" => failure.tenant_id,
+      "semantic_session_id" => failure.semantic_session_id,
+      "causal_unit_id" => failure.causal_unit_id,
+      "kind" => Atom.to_string(failure.kind),
+      "request_trace_id" => failure.request_trace_id,
+      "substrate_trace_id" => failure.substrate_trace_id,
+      "context_hash" => failure.context_hash,
+      "canonical_idempotency_key" => failure.canonical_idempotency_key,
+      "idempotency_alias" => idempotency_alias_for_identity(failure),
+      "idempotency_ref" => idempotency_ref,
+      "idempotency_ref_kind" => idempotency_ref_kind(failure),
+      "semantic_failure_payload_hash" => semantic_failure_payload_hash(failure)
+    }
+  end
+
+  @spec semantic_failure_payload_hash(t()) :: String.t()
+  def semantic_failure_payload_hash(%__MODULE__{} = failure) do
+    @payload_hash_prefix <> sha256(canonical_json(to_payload(failure)))
+  end
+
+  @spec legacy_journal_entry_id(t()) :: String.t()
+  def legacy_journal_entry_id(%__MODULE__{} = failure) do
     [
-      "semantic_failure",
+      @legacy_journal_entry_prefix,
       failure.semantic_session_id,
       failure.causal_unit_id,
       Atom.to_string(failure.kind)
     ]
     |> Enum.join(":")
+  end
+
+  @spec legacy_journal_entry_alias(t()) :: map()
+  def legacy_journal_entry_alias(%__MODULE__{} = failure) do
+    legacy_id = legacy_journal_entry_id(failure)
+
+    %{
+      "alias_type" => "read_only_legacy_semantic_failure_journal_id",
+      "alias_id" => legacy_id,
+      "canonical_entry_id" => journal_entry_id(failure),
+      "source_ref" => "phase5-v7-m5-semantic-failure-journal-identity",
+      "expires_after" => "legacy semantic failure journal migration",
+      "parse_result" => legacy_journal_entry_parse_result(legacy_id)
+    }
+  end
+
+  @spec parse_legacy_journal_entry_id(String.t()) :: {:ok, map()} | {:error, term()}
+  def parse_legacy_journal_entry_id(entry_id) when is_binary(entry_id) do
+    case String.split(entry_id, ":") do
+      [@legacy_journal_entry_prefix, session_id, causal_unit_id, kind_string] ->
+        case atom_from_string(kind_string, @kinds) do
+          nil ->
+            {:error, {:legacy_semantic_failure_journal_id_unknown_kind, kind_string}}
+
+          kind_atom ->
+            {:ok,
+             %{
+               "semantic_session_id" => session_id,
+               "causal_unit_id" => causal_unit_id,
+               "kind" => Atom.to_string(kind_atom)
+             }}
+        end
+
+      _other ->
+        {:error, :legacy_semantic_failure_journal_id_ambiguous}
+    end
+  end
+
+  @spec legacy_journal_entry_id_scan([String.t()]) :: map()
+  def legacy_journal_entry_id_scan(entry_ids) when is_list(entry_ids) do
+    {legacy_ids, non_legacy_ids} =
+      Enum.split_with(entry_ids, &String.starts_with?(&1, @legacy_journal_entry_prefix <> ":"))
+
+    %{
+      "source_ref" => "phase5-v7-m5-semantic-failure-journal-identity",
+      "legacy_ids" => legacy_ids,
+      "non_legacy_ids" => non_legacy_ids,
+      "ambiguous_legacy_ids" =>
+        Enum.filter(legacy_ids, &match?({:error, _reason}, parse_legacy_journal_entry_id(&1))),
+      "duplicate_legacy_ids" => duplicate_values(legacy_ids)
+    }
   end
 
   @spec default_retry_class(kind()) :: retry_class()
@@ -229,6 +338,55 @@ defmodule OuterBrain.Contracts.SemanticFailure do
     end
   end
 
+  defp default_idempotency_alias(
+         tenant_id,
+         semantic_session_id,
+         causal_unit_id,
+         kind,
+         request_trace_id,
+         substrate_trace_id,
+         context_hash
+       ) do
+    @idempotency_alias_prefix <>
+      sha256(
+        canonical_json(%{
+          "tenant_id" => tenant_id,
+          "semantic_session_id" => semantic_session_id,
+          "causal_unit_id" => causal_unit_id,
+          "kind" => Atom.to_string(kind),
+          "request_trace_id" => request_trace_id,
+          "substrate_trace_id" => substrate_trace_id,
+          "context_hash" => context_hash
+        })
+      )
+  end
+
+  defp idempotency_ref_kind(%__MODULE__{canonical_idempotency_key: key})
+       when is_binary(key) and key != "",
+       do: "canonical_idempotency_key"
+
+  defp idempotency_ref_kind(_failure), do: "declared_alias"
+
+  defp idempotency_alias_for_identity(%__MODULE__{canonical_idempotency_key: key})
+       when is_binary(key) and key != "",
+       do: nil
+
+  defp idempotency_alias_for_identity(%__MODULE__{} = failure), do: failure.idempotency_alias
+
+  defp legacy_journal_entry_parse_result(legacy_id) do
+    case parse_legacy_journal_entry_id(legacy_id) do
+      {:ok, parsed} -> %{"status" => "parseable", "parsed" => parsed}
+      {:error, reason} -> %{"status" => "ambiguous", "reason" => inspect(reason)}
+    end
+  end
+
+  defp duplicate_values(values) do
+    values
+    |> Enum.frequencies()
+    |> Enum.filter(fn {_value, count} -> count > 1 end)
+    |> Enum.map(fn {value, _count} -> value end)
+  end
+
   defp provenance(source) do
     case fetch_value(source, :provenance) do
       nil ->
@@ -260,4 +418,58 @@ defmodule OuterBrain.Contracts.SemanticFailure do
   defp atom_from_string(value, allowed) do
     Enum.find(allowed, &(Atom.to_string(&1) == value))
   end
+
+  defp sha256(value), do: :crypto.hash(:sha256, value) |> Base.encode16(case: :lower)
+
+  defp canonical_json(value),
+    do: value |> canonical_value() |> encode_json_value() |> IO.iodata_to_binary()
+
+  defp canonical_value(%_{} = value), do: value |> Map.from_struct() |> canonical_value()
+
+  defp canonical_value(value) when is_map(value) do
+    Map.new(value, fn {key, nested} -> {to_string(key), canonical_value(nested)} end)
+  end
+
+  defp canonical_value(value) when is_list(value), do: Enum.map(value, &canonical_value/1)
+  defp canonical_value(value) when is_atom(value), do: Atom.to_string(value)
+  defp canonical_value(value), do: value
+
+  defp encode_json_value(nil), do: "null"
+  defp encode_json_value(true), do: "true"
+  defp encode_json_value(false), do: "false"
+  defp encode_json_value(value) when is_binary(value), do: [?\", escape_string(value), ?\"]
+  defp encode_json_value(value) when is_integer(value), do: Integer.to_string(value)
+
+  defp encode_json_value(value) when is_float(value) do
+    :erlang.float_to_binary(value, [:short, :compact])
+  end
+
+  defp encode_json_value(value) when is_list(value) do
+    [?[, value |> Enum.map(&encode_json_value/1) |> Enum.intersperse(","), ?]]
+  end
+
+  defp encode_json_value(value) when is_map(value) do
+    entries =
+      value
+      |> Enum.map(fn {key, nested} -> {to_string(key), nested} end)
+      |> Enum.sort_by(fn {key, _nested} -> key end)
+      |> Enum.map(fn {key, nested} -> [encode_json_value(key), ?:, encode_json_value(nested)] end)
+
+    [?{, Enum.intersperse(entries, ","), ?}]
+  end
+
+  defp escape_string(<<>>), do: []
+  defp escape_string(<<"\"", rest::binary>>), do: [?\\, ?", escape_string(rest)]
+  defp escape_string(<<"\\", rest::binary>>), do: [?\\, ?\\, escape_string(rest)]
+  defp escape_string(<<"\b", rest::binary>>), do: [?\\, ?b, escape_string(rest)]
+  defp escape_string(<<"\f", rest::binary>>), do: [?\\, ?f, escape_string(rest)]
+  defp escape_string(<<"\n", rest::binary>>), do: [?\\, ?n, escape_string(rest)]
+  defp escape_string(<<"\r", rest::binary>>), do: [?\\, ?r, escape_string(rest)]
+  defp escape_string(<<"\t", rest::binary>>), do: [?\\, ?t, escape_string(rest)]
+
+  defp escape_string(<<char::utf8, rest::binary>>) when char < 0x20 do
+    [?\\, ?u, char |> Integer.to_string(16) |> String.pad_leading(4, "0"), escape_string(rest)]
+  end
+
+  defp escape_string(<<char::utf8, rest::binary>>), do: [<<char::utf8>>, escape_string(rest)]
 end

@@ -83,6 +83,7 @@ defmodule OuterBrain.Bridges.DomainSubmissionTest do
                scope_id: "workspace/main",
                workspace_root: "/workspace/main",
                idempotency_key: "semantic-turn-2",
+               canonical_idempotency_key: "idem:v1:semantic-turn-2",
                trace_id: "trace/semantic-turn-2",
                domain_module: Citadel.DomainSurface.Examples.ProvingGround,
                route_sources: [
@@ -98,6 +99,8 @@ defmodule OuterBrain.Bridges.DomainSubmissionTest do
     assert carrier.semantic_session_id == "session-semantic-2"
     assert carrier.causal_unit_id == "semantic-turn-2"
     assert carrier.request_trace_id == "trace/semantic-turn-2"
+    assert carrier.canonical_idempotency_key == "idem:v1:semantic-turn-2"
+    assert carrier.idempotency_alias == "semantic-turn-2"
     assert [%{"surface" => "outer_brain.domain_submission"}] = carrier.provenance
   end
 
@@ -124,5 +127,7 @@ defmodule OuterBrain.Bridges.DomainSubmissionTest do
     assert carrier.semantic_session_id == "session-semantic-3"
     assert carrier.causal_unit_id == "semantic-turn-3"
     assert carrier.request_trace_id == "trace/semantic-turn-3"
+    assert carrier.canonical_idempotency_key == nil
+    assert carrier.idempotency_alias == "semantic-turn-3"
   end
 end
