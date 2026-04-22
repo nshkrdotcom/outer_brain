@@ -2,6 +2,7 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
   use ExUnit.Case, async: false
 
   alias Ecto.Adapters.SQL.Sandbox
+  alias OuterBrain.Contracts.ReplyBodyBoundary
   alias OuterBrain.Contracts.SemanticFailure
   alias OuterBrain.Journal.Tables.ReplyPublicationRecord
   alias OuterBrain.Persistence.{PostgresContainer, Repo, Store}
@@ -56,9 +57,18 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
         "Done"
       )
 
-    replay =
+    same_replay =
       reply_publication!(
         "publication-replayed",
+        "causal-publication-1",
+        :final,
+        "causal-publication-1:final",
+        "Done"
+      )
+
+    mismatched_replay =
+      reply_publication!(
+        "publication-replayed-mismatch",
         "causal-publication-1",
         :final,
         "causal-publication-1:final",
@@ -68,13 +78,21 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
     assert {:ok, persisted_first} = Store.record_reply_publication(first, repo: repo)
     assert persisted_first.publication_id == "publication-original"
 
-    assert {:ok, persisted_replay} = Store.record_reply_publication(replay, repo: repo)
+    assert {:ok, persisted_replay} = Store.record_reply_publication(same_replay, repo: repo)
     assert persisted_replay.publication_id == "publication-original"
-    assert persisted_replay.body == "Done after replay"
+    assert persisted_replay.body_ref["body_hash"] == first.body_ref["body_hash"]
+
+    assert {:error, {:reply_publication_body_ref_mismatch, mismatch}} =
+             Store.record_reply_publication(mismatched_replay, repo: repo)
+
+    assert mismatch.dedupe_key == "causal-publication-1:final"
+    assert mismatch.existing_body_hash == first.body_ref["body_hash"]
+    assert mismatch.replay_body_hash == mismatched_replay.body_ref["body_hash"]
 
     assert [publication] = Store.reply_publications("causal-publication-1", repo: repo)
     assert publication.publication_id == "publication-original"
     assert publication.dedupe_key == "causal-publication-1:final"
+    assert publication.body_ref["body_hash"] == first.body_ref["body_hash"]
   end
 
   defp semantic_failure!(overrides) do
@@ -97,6 +115,8 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
   end
 
   defp reply_publication!(publication_id, causal_unit_id, phase, dedupe_key, body) do
+    {:ok, reply_body} = ReplyBodyBoundary.build(causal_unit_id, phase, dedupe_key, body)
+
     {:ok, publication} =
       ReplyPublicationRecord.new(%{
         publication_id: publication_id,
@@ -104,7 +124,8 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
         phase: phase,
         state: :published,
         dedupe_key: dedupe_key,
-        body: body
+        body: reply_body.preview,
+        body_ref: reply_body.ref
       })
 
     publication

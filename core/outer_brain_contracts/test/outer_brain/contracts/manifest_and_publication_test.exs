@@ -3,6 +3,7 @@ defmodule OuterBrain.Contracts.ManifestAndPublicationTest do
 
   alias OuterBrain.Contracts.{
     ActionRequest,
+    ReplyBodyBoundary,
     ReplyPublication,
     RuntimeFact,
     ToolManifestSnapshot
@@ -49,6 +50,14 @@ defmodule OuterBrain.Contracts.ManifestAndPublicationTest do
 
     assert request.route == "reply_to_user"
 
+    assert {:ok, provisional_body} =
+             ReplyBodyBoundary.build(
+               "causal_1",
+               :provisional,
+               "reply:provisional",
+               "Working on it"
+             )
+
     assert {:ok, provisional} =
              ReplyPublication.new(%{
                publication_id: "publication_1",
@@ -56,8 +65,12 @@ defmodule OuterBrain.Contracts.ManifestAndPublicationTest do
                phase: :provisional,
                dedupe_key: "reply:provisional",
                state: :published,
-               body: "Working on it"
+               body: provisional_body.preview,
+               body_ref: provisional_body.ref
              })
+
+    assert {:ok, final_body} =
+             ReplyBodyBoundary.build("causal_1", :final, "reply:final", "Done")
 
     assert {:ok, final} =
              ReplyPublication.new(%{
@@ -66,10 +79,13 @@ defmodule OuterBrain.Contracts.ManifestAndPublicationTest do
                phase: :final,
                dedupe_key: "reply:final",
                state: :published,
-               body: "Done"
+               body: final_body.preview,
+               body_ref: final_body.ref
              })
 
     assert provisional.phase != final.phase
+    assert provisional.body_ref["body_hash"] == provisional_body.ref["content_hash"]
+    assert final.body_ref["schema_hash_alg"] == "sha256"
 
     assert {:ok, fact} =
              RuntimeFact.new(%{
@@ -80,5 +96,33 @@ defmodule OuterBrain.Contracts.ManifestAndPublicationTest do
              })
 
     assert RuntimeFact.wake_key(fact) == "causal_1:execution_completed"
+  end
+
+  test "reply publications reject raw inline bodies without artifact refs" do
+    assert {:error, :invalid_reply_publication} =
+             ReplyPublication.new(%{
+               publication_id: "publication_raw",
+               causal_unit_id: "causal_1",
+               phase: :final,
+               dedupe_key: "reply:raw",
+               state: :published,
+               body: String.duplicate("full semantic reply ", 500)
+             })
+  end
+
+  test "reply publications reject unredacted previews even with a body ref" do
+    assert {:ok, reply_body} =
+             ReplyBodyBoundary.build("causal_1", :final, "reply:redaction", "token=secret")
+
+    assert {:error, :invalid_reply_publication} =
+             ReplyPublication.new(%{
+               publication_id: "publication_unredacted",
+               causal_unit_id: "causal_1",
+               phase: :final,
+               dedupe_key: "reply:redaction",
+               state: :published,
+               body: "token=secret",
+               body_ref: reply_body.ref
+             })
   end
 end
