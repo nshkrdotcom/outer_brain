@@ -33,6 +33,12 @@ defmodule OuterBrain.Runtime.MemoryOperationBindings do
     :share_up_proof
   ]
 
+  @invalidation_bindings [
+    :recall_cache_invalidate,
+    :sidecar_index_invalidate,
+    :durable_invalidation_rows
+  ]
+
   @spec recall_callbacks(map()) :: {:ok, keyword()} | {:error, term()}
   def recall_callbacks(bindings) when is_map(bindings) do
     with :ok <- require_bindings(bindings, @recall_bindings) do
@@ -82,6 +88,20 @@ defmodule OuterBrain.Runtime.MemoryOperationBindings do
   end
 
   def share_up_callbacks(_bindings), do: {:error, :invalid_share_up_bindings}
+
+  @spec invalidation_callbacks(map()) :: {:ok, keyword()} | {:error, term()}
+  def invalidation_callbacks(bindings) when is_map(bindings) do
+    with :ok <- require_bindings(bindings, @invalidation_bindings) do
+      {:ok,
+       [
+         recall_cache_invalidate: fetch!(bindings, :recall_cache_invalidate),
+         sidecar_index_invalidate: fetch!(bindings, :sidecar_index_invalidate),
+         durable_invalidation_rows: fetch!(bindings, :durable_invalidation_rows)
+       ]}
+    end
+  end
+
+  def invalidation_callbacks(_bindings), do: {:error, :invalid_invalidation_bindings}
 
   defp require_bindings(bindings, required) do
     case Enum.find(required, &(not valid_binding?(bindings, &1))) do
