@@ -147,6 +147,124 @@ defmodule OuterBrain.Memory.RecallOrchestratorTest do
     assert_received {:degraded_proof, :fail_empty, :policy_registry_unavailable}
   end
 
+  test "fail-closed policy degradation stops before tier reads or proof emission" do
+    test_pid = self()
+
+    callbacks = [
+      snapshot_pin: fn _request -> {:ok, ordering_evidence()} end,
+      access_graph_views: fn _context ->
+        {:ok, %{authorized_agent_refs: ["agent://alpha"], shared_scope_refs: []}}
+      end,
+      read_policy: fn _context ->
+        {:error, {:degraded, :fail_closed, :policy_registry_unavailable}}
+      end,
+      tier_reader: fn tier, _context ->
+        send(test_pid, {:unexpected_tier_read, tier})
+        {:ok, []}
+      end,
+      proof_emitter: fn _context ->
+        send(test_pid, :unexpected_proof)
+        {:ok, %{}}
+      end
+    ]
+
+    assert {:error, {:policy_degraded, :policy_registry_unavailable}} =
+             RecallOrchestrator.recall(recall_request(), callbacks)
+
+    refute_received {:unexpected_tier_read, _tier}
+    refute_received :unexpected_proof
+  end
+
+  test "fail-partial policy degradation continues with proof evidence" do
+    test_pid = self()
+
+    callbacks = [
+      snapshot_pin: fn _request -> {:ok, ordering_evidence()} end,
+      access_graph_views: fn _context ->
+        {:ok,
+         %{
+           authorized_agent_refs: ["agent://alpha"],
+           shared_scope_refs: ["scope://team"],
+           governed_policy_refs: ["promote-policy://stable"]
+         }}
+      end,
+      read_policy: fn _context ->
+        {:error, {:degraded, :fail_partial, :policy_registry_stale}}
+      end,
+      tier_reader: fn tier, context ->
+        send(test_pid, {:partial_tier_read, tier, context.read_policy.degraded_reason})
+        {:ok, tier_fragments(tier)}
+      end,
+      proof_emitter: fn context ->
+        send(test_pid, {:partial_proof, context.read_policy.degraded_reason})
+        {:ok, %{proof_id: "proof://recall/fail-partial", kind: :recall}}
+      end
+    ]
+
+    assert {:ok, result} = RecallOrchestrator.recall(recall_request(), callbacks)
+
+    assert Enum.map(result.admitted_fragments, & &1.fragment_id) == [
+             "private-allowed",
+             "shared-allowed",
+             "governed-allowed"
+           ]
+
+    assert_received {:partial_tier_read, :private, :policy_registry_stale}
+    assert_received {:partial_tier_read, :shared, :policy_registry_stale}
+    assert_received {:partial_tier_read, :governed, :policy_registry_stale}
+    assert_received {:partial_proof, :policy_registry_stale}
+  end
+
+  test "concurrent revocation after the pin cannot change the epoch used by tiers or proof" do
+    test_pid = self()
+
+    callbacks = [
+      snapshot_pin: fn _request ->
+        Process.put(:current_epoch, 42)
+        {:ok, ordering_evidence()}
+      end,
+      access_graph_views: fn context ->
+        assert context.snapshot_epoch == 42
+
+        {:ok,
+         %{
+           authorized_agent_refs: ["agent://alpha"],
+           shared_scope_refs: ["scope://team"],
+           governed_policy_refs: ["promote-policy://stable"]
+         }}
+      end,
+      read_policy: fn _context -> {:ok, %{policy_ref: "read-policy://alpha"}} end,
+      tier_reader: fn tier, context ->
+        if tier == :private do
+          Process.put(:current_epoch, 43)
+        end
+
+        send(
+          test_pid,
+          {:revocation_tier_epoch, tier, context.snapshot_epoch, Process.get(:current_epoch)}
+        )
+
+        {:ok, tier_fragments(tier)}
+      end,
+      proof_emitter: fn context ->
+        send(
+          test_pid,
+          {:revocation_proof_epoch, context.snapshot_epoch, Process.get(:current_epoch)}
+        )
+
+        {:ok, %{proof_id: "proof://recall/concurrent-revocation", kind: :recall}}
+      end
+    ]
+
+    assert {:ok, result} = RecallOrchestrator.recall(recall_request(), callbacks)
+
+    assert result.snapshot_epoch == 42
+    assert_received {:revocation_tier_epoch, :private, 42, 43}
+    assert_received {:revocation_tier_epoch, :shared, 42, 43}
+    assert_received {:revocation_tier_epoch, :governed, 42, 43}
+    assert_received {:revocation_proof_epoch, 42, 43}
+  end
+
   defp recall_request do
     %{
       tenant_ref: "tenant://alpha",
