@@ -5,7 +5,7 @@ defmodule OuterBrain.Persistence.Store do
 
   import Ecto.Query
 
-  alias OuterBrain.Contracts.{Fence, Lease, SemanticFailure}
+  alias OuterBrain.Contracts.{Fence, Lease, ReplyBodyBoundary, SemanticFailure}
 
   alias OuterBrain.Journal.Tables.{
     RecoveryTaskRecord,
@@ -111,33 +111,13 @@ defmodule OuterBrain.Persistence.Store do
   end
 
   @spec record_reply_publication(ReplyPublicationRecord.t(), keyword()) ::
-          {:ok, ReplyPublicationRecord.t()} | {:error, Ecto.Changeset.t()}
+          {:ok, ReplyPublicationRecord.t()} | {:error, Ecto.Changeset.t() | term()}
   def record_reply_publication(%ReplyPublicationRecord{} = publication, opts \\ []) do
     repo = repo(opts)
 
-    changeset =
-      ReplyPublication.changeset(%ReplyPublication{}, %{
-        publication_id: publication.publication_id,
-        causal_unit_id: publication.causal_unit_id,
-        phase: publication.phase,
-        state: publication.state,
-        dedupe_key: publication.dedupe_key,
-        body: publication.body
-      })
-
-    case repo.insert(changeset,
-           on_conflict: [
-             set: [
-               state: publication.state,
-               body: publication.body,
-               updated_at: DateTime.utc_now()
-             ]
-           ],
-           conflict_target: :dedupe_key,
-           returning: true
-         ) do
-      {:ok, schema} -> {:ok, schema_to_reply_publication(schema)}
-      {:error, changeset} -> {:error, changeset}
+    case repo.transaction(fn -> do_record_reply_publication(repo, publication) end) do
+      {:ok, publication} -> {:ok, publication}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -150,6 +130,30 @@ defmodule OuterBrain.Persistence.Store do
     |> order_by([publication], asc: publication.inserted_at, asc: publication.publication_id)
     |> repo.all()
     |> Enum.map(&schema_to_reply_publication/1)
+  end
+
+  @spec latest_publication(String.t(), keyword()) :: ReplyPublicationRecord.t() | nil
+  def latest_publication(causal_unit_id, opts \\ []) when is_binary(causal_unit_id) do
+    repo = repo(opts)
+
+    ReplyPublication
+    |> where([publication], publication.causal_unit_id == ^causal_unit_id)
+    |> order_by(
+      [publication],
+      desc:
+        fragment(
+          "CASE WHEN ? = 'final' THEN 2 WHEN ? = 'provisional' THEN 1 ELSE 0 END",
+          publication.phase,
+          publication.phase
+        ),
+      desc: publication.updated_at
+    )
+    |> limit(1)
+    |> repo.one()
+    |> case do
+      nil -> nil
+      schema -> schema_to_reply_publication(schema)
+    end
   end
 
   @spec record_semantic_failure(SemanticFailure.t(), keyword()) ::
@@ -212,6 +216,70 @@ defmodule OuterBrain.Persistence.Store do
     |> select([publication], publication.phase)
     |> limit(1)
     |> repo.one()
+  end
+
+  defp do_record_reply_publication(repo, publication) do
+    existing =
+      ReplyPublication
+      |> where([schema], schema.dedupe_key == ^publication.dedupe_key)
+      |> lock("FOR UPDATE")
+      |> repo.one()
+
+    case existing do
+      nil ->
+        insert_reply_publication(repo, publication)
+
+      %ReplyPublication{} = schema ->
+        update_idempotent_reply_publication(repo, schema, publication)
+    end
+  end
+
+  defp insert_reply_publication(repo, publication) do
+    changeset =
+      ReplyPublication.changeset(%ReplyPublication{}, reply_publication_attrs(publication))
+
+    case repo.insert(changeset, returning: true) do
+      {:ok, schema} -> schema_to_reply_publication(schema)
+      {:error, changeset} -> repo.rollback(changeset)
+    end
+  end
+
+  defp update_idempotent_reply_publication(repo, schema, publication) do
+    if ReplyBodyBoundary.equivalent_ref?(schema.body_ref, publication.body_ref) do
+      attrs =
+        publication
+        |> reply_publication_attrs()
+        |> Map.put(:publication_id, schema.publication_id)
+
+      changeset = ReplyPublication.changeset(schema, attrs)
+
+      case repo.update(changeset) do
+        {:ok, schema} -> schema_to_reply_publication(schema)
+        {:error, changeset} -> repo.rollback(changeset)
+      end
+    else
+      repo.rollback(
+        {:reply_publication_body_ref_mismatch,
+         %{
+           dedupe_key: publication.dedupe_key,
+           existing_body_hash: ReplyBodyBoundary.body_hash(schema.body_ref),
+           replay_body_hash: ReplyBodyBoundary.body_hash(publication.body_ref),
+           safe_action: :quarantine_duplicate_replay
+         }}
+      )
+    end
+  end
+
+  defp reply_publication_attrs(publication) do
+    %{
+      publication_id: publication.publication_id,
+      causal_unit_id: publication.causal_unit_id,
+      phase: publication.phase,
+      state: publication.state,
+      dedupe_key: publication.dedupe_key,
+      body: publication.body,
+      body_ref: publication.body_ref
+    }
   end
 
   defp do_acquire_lease(repo, candidate, now) do
@@ -318,7 +386,8 @@ defmodule OuterBrain.Persistence.Store do
       phase: schema.phase,
       state: schema.state,
       dedupe_key: schema.dedupe_key,
-      body: schema.body
+      body: schema.body,
+      body_ref: schema.body_ref
     }
   end
 

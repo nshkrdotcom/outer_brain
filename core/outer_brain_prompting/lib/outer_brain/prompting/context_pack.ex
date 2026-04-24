@@ -26,10 +26,72 @@ defmodule OuterBrain.Prompting.ContextPack do
         fetch_source_report(base_pack, source, context_bindings, opts)
       end)
 
-    Map.merge(base_pack, %{
-      fragments: Enum.flat_map(reports, & &1.fragments),
+    fragments = Enum.flat_map(reports, & &1.fragments)
+
+    base_pack
+    |> Map.merge(%{
+      fragments: fragments,
       context_sources: Enum.map(reports, &Map.delete(&1, :fragments))
     })
+    |> enforce_context_budget(fragments, Keyword.get(opts, :context_budget))
+  end
+
+  defp enforce_context_budget(pack, _fragments, nil), do: pack
+
+  defp enforce_context_budget(pack, fragments, budget) when is_map(budget) do
+    max_context_bytes = fetch_value(budget, :max_context_bytes)
+    current_context_bytes = fetch_value(budget, :current_context_bytes) || 0
+    append_context_bytes = context_fragment_bytes(fragments)
+    projected_context_bytes = current_context_bytes + append_context_bytes
+
+    report =
+      %{
+        budget_ref: fetch_value(budget, :budget_ref),
+        budget_scope: fetch_value(budget, :budget_scope),
+        enforcement_point: fetch_value(budget, :enforcement_point) || :tool_result_append,
+        max_context_bytes: max_context_bytes,
+        current_context_bytes: current_context_bytes,
+        append_context_bytes: append_context_bytes,
+        projected_context_bytes: projected_context_bytes
+      }
+
+    cond do
+      not is_integer(max_context_bytes) or max_context_bytes < 0 ->
+        pack
+        |> Map.put(:fragments, [])
+        |> Map.put(:context_budget, Map.put(report, :decision, :quarantine_meter_unavailable))
+
+      projected_context_bytes > max_context_bytes ->
+        pack
+        |> Map.put(:fragments, [])
+        |> Map.put(:context_budget, Map.put(report, :decision, :reject_context_append))
+
+      true ->
+        Map.put(pack, :context_budget, Map.put(report, :decision, :allow))
+    end
+  end
+
+  defp enforce_context_budget(pack, fragments, _budget) do
+    report = %{
+      budget_ref: nil,
+      budget_scope: nil,
+      enforcement_point: :tool_result_append,
+      max_context_bytes: nil,
+      current_context_bytes: 0,
+      append_context_bytes: context_fragment_bytes(fragments),
+      projected_context_bytes: context_fragment_bytes(fragments),
+      decision: :quarantine_meter_unavailable
+    }
+
+    pack
+    |> Map.put(:fragments, [])
+    |> Map.put(:context_budget, report)
+  end
+
+  defp context_fragment_bytes(fragments) do
+    fragments
+    |> :erlang.term_to_binary()
+    |> byte_size()
   end
 
   defp fetch_source_report(base_pack, source, context_bindings, opts) do

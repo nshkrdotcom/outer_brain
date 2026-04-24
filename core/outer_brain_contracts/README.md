@@ -4,6 +4,14 @@ Pure contracts for fenced semantic sessions, manifest snapshots, action
 requests, runtime facts, semantic failure carriers, reply publication state, and
 Phase 4 semantic integrity payloads.
 
+`OuterBrain.Contracts.SemanticGatewayContract` is the Phase 6
+`SemanticGatewayContract.v1` owner aggregate. It composes the existing semantic
+provenance, provider-neutral failure, read-only context adapter, reply
+publication dedupe, suppression visibility, privacy redaction, bounded evidence,
+and restart/replay refs required to close the Phase 5PRELIM `P5P-002`
+handoff. It rejects raw payload evidence, provider-SDK mock proof, and
+lower-runtime-only proof without OuterBrain owner evidence.
+
 `OuterBrain.Contracts.SemanticFailure` is the provider-neutral failure carrier
 used at the semantic-runtime boundary. It carries deterministic failure kind,
 retry class, tenant/session/trace/causal identity, provenance, optional provider

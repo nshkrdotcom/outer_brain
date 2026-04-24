@@ -212,7 +212,9 @@ defmodule OuterBrain.Journal.Tables do
     Durable publication row describing provisional or final user-facing output.
     """
 
-    defstruct [:publication_id, :causal_unit_id, :phase, :state, :dedupe_key, :body]
+    alias OuterBrain.Contracts.ReplyBodyBoundary
+
+    defstruct [:publication_id, :causal_unit_id, :phase, :state, :dedupe_key, :body, :body_ref]
 
     @type t :: %__MODULE__{
             publication_id: String.t(),
@@ -220,7 +222,8 @@ defmodule OuterBrain.Journal.Tables do
             phase: :provisional | :final,
             state: :pending | :published | :suppressed,
             dedupe_key: String.t(),
-            body: String.t()
+            body: String.t(),
+            body_ref: ReplyBodyBoundary.body_ref()
           }
 
     def new(%{
@@ -229,21 +232,28 @@ defmodule OuterBrain.Journal.Tables do
           phase: phase,
           state: state,
           dedupe_key: dedupe_key,
-          body: body
+          body: body,
+          body_ref: body_ref
         })
         when is_binary(publication_id) and is_binary(causal_unit_id) and
                phase in [:provisional, :final] and
                state in [:pending, :published, :suppressed] and is_binary(dedupe_key) and
-               is_binary(body) do
-      {:ok,
-       %__MODULE__{
-         publication_id: publication_id,
-         causal_unit_id: causal_unit_id,
-         phase: phase,
-         state: state,
-         dedupe_key: dedupe_key,
-         body: body
-       }}
+               is_binary(body) and is_map(body_ref) do
+      with true <- ReplyBodyBoundary.valid_preview?(body),
+           :ok <- ReplyBodyBoundary.validate_ref(body_ref, causal_unit_id, phase, dedupe_key) do
+        {:ok,
+         %__MODULE__{
+           publication_id: publication_id,
+           causal_unit_id: causal_unit_id,
+           phase: phase,
+           state: state,
+           dedupe_key: dedupe_key,
+           body: body,
+           body_ref: body_ref
+         }}
+      else
+        _reason -> {:error, :invalid_reply_publication_record}
+      end
     end
 
     def new(_attrs), do: {:error, :invalid_reply_publication_record}

@@ -3,6 +3,7 @@ defmodule OuterBrain.Persistence.StoreTest do
 
   alias Ecto.Adapters.SQL.Sandbox
   alias OuterBrain.Contracts.Lease
+  alias OuterBrain.Contracts.ReplyBodyBoundary
 
   alias OuterBrain.Journal.Tables.{
     RecoveryTaskRecord,
@@ -168,6 +169,8 @@ defmodule OuterBrain.Persistence.StoreTest do
   end
 
   defp reply_publication!(publication_id, causal_unit_id, phase, state, dedupe_key, body) do
+    {:ok, reply_body} = ReplyBodyBoundary.build(causal_unit_id, phase, dedupe_key, body)
+
     {:ok, publication} =
       ReplyPublicationRecord.new(%{
         publication_id: publication_id,
@@ -175,7 +178,8 @@ defmodule OuterBrain.Persistence.StoreTest do
         phase: phase,
         state: state,
         dedupe_key: dedupe_key,
-        body: body
+        body: reply_body.preview,
+        body_ref: reply_body.ref
       })
 
     publication

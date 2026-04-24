@@ -1,6 +1,7 @@
 defmodule OuterBrain.JournalTest do
   use ExUnit.Case, async: true
 
+  alias OuterBrain.Contracts.ReplyBodyBoundary
   alias OuterBrain.Journal
 
   alias OuterBrain.Journal.Tables.{
@@ -63,7 +64,20 @@ defmodule OuterBrain.JournalTest do
                         phase: :provisional,
                         state: :published,
                         dedupe_key: "causal_1:provisional",
-                        body: "Working on it"
+                        body:
+                          reply_body!(
+                            "causal_1",
+                            :provisional,
+                            "causal_1:provisional",
+                            "Working on it"
+                          ).preview,
+                        body_ref:
+                          reply_body!(
+                            "causal_1",
+                            :provisional,
+                            "causal_1:provisional",
+                            "Working on it"
+                          ).ref
                       })
                     )
                   ),
@@ -76,7 +90,8 @@ defmodule OuterBrain.JournalTest do
                         phase: :final,
                         state: :published,
                         dedupe_key: "causal_1:final",
-                        body: "Done"
+                        body: reply_body!("causal_1", :final, "causal_1:final", "Done").preview,
+                        body_ref: reply_body!("causal_1", :final, "causal_1:final", "Done").ref
                       })
                     )
                   )
@@ -143,4 +158,9 @@ defmodule OuterBrain.JournalTest do
   end
 
   defp ok!({:ok, value}), do: value
+
+  defp reply_body!(causal_unit_id, phase, dedupe_key, body) do
+    {:ok, reply_body} = ReplyBodyBoundary.build(causal_unit_id, phase, dedupe_key, body)
+    reply_body
+  end
 end

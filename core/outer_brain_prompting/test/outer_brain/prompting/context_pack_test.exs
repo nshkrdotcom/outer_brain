@@ -237,6 +237,91 @@ defmodule OuterBrain.Prompting.ContextPackTest do
     assert fragment.provenance["external_system_ref"] == "memory://workspace/main"
   end
 
+  test "rejects context fragments before append when context budget is exhausted" do
+    frame = SemanticFrame.seed("session_delta", "answer with retrieved context")
+
+    pack =
+      ContextPack.build(
+        frame,
+        ["turn_1"],
+        trace_id: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        context_sources: [
+          %{
+            source_ref: "workspace_memory",
+            binding_key: "shared_memory",
+            usage_phase: :retrieval,
+            required?: true,
+            timeout_ms: 20,
+            schema_ref: "context/workspace_memory",
+            max_fragments: 1
+          }
+        ],
+        context_bindings: %{
+          "shared_memory" => %{
+            "adapter_key" => "read_only_probe",
+            "config" => %{"workspace" => "main"},
+            "test_pid" => self()
+          }
+        },
+        adapter_registry: %{"read_only_probe" => ReadOnlyProbeAdapter},
+        context_budget: %{
+          budget_ref: "budget://phase5/m8/local-no-spend-inference",
+          budget_scope: "subject://session_delta",
+          max_context_bytes: 1,
+          current_context_bytes: 0,
+          enforcement_point: :tool_result_append
+        }
+      )
+
+    assert_receive {:context_adapter_request, _request, _runtime_binding}
+    assert pack.fragments == []
+    assert pack.context_budget.decision == :reject_context_append
+    assert pack.context_budget.enforcement_point == :tool_result_append
+    assert pack.context_budget.append_context_bytes > pack.context_budget.max_context_bytes
+  end
+
+  test "allows context fragments when projected context stays within budget" do
+    frame = SemanticFrame.seed("session_epsilon", "answer with retrieved context")
+
+    pack =
+      ContextPack.build(
+        frame,
+        ["turn_1"],
+        trace_id: "cccccccccccccccccccccccccccccccc",
+        context_sources: [
+          %{
+            source_ref: "workspace_memory",
+            binding_key: "shared_memory",
+            usage_phase: :retrieval,
+            required?: true,
+            timeout_ms: 20,
+            schema_ref: "context/workspace_memory",
+            max_fragments: 1
+          }
+        ],
+        context_bindings: %{
+          "shared_memory" => %{
+            "adapter_key" => "read_only_probe",
+            "config" => %{"workspace" => "main"},
+            "test_pid" => self()
+          }
+        },
+        adapter_registry: %{"read_only_probe" => ReadOnlyProbeAdapter},
+        context_budget: %{
+          budget_ref: "budget://phase5/m8/local-no-spend-inference",
+          budget_scope: "subject://session_epsilon",
+          max_context_bytes: 1_000_000,
+          current_context_bytes: 0,
+          enforcement_point: :tool_result_append
+        }
+      )
+
+    assert_receive {:context_adapter_request, _request, _runtime_binding}
+    assert [_fragment] = pack.fragments
+    assert pack.context_budget.decision == :allow
+    assert pack.context_budget.projected_context_bytes <= pack.context_budget.max_context_bytes
+  end
+
   defp stringify_keys(map) do
     Map.new(map, fn {key, value} -> {to_string(key), value} end)
   end

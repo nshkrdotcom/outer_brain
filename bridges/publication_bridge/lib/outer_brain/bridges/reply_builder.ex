@@ -3,8 +3,12 @@ defmodule OuterBrain.Bridges.ReplyBuilder do
   Builds provisional and final reply publication contracts and journal rows.
   """
 
+  alias OuterBrain.Contracts.ReplyBodyBoundary
   alias OuterBrain.Contracts.ReplyPublication
   alias OuterBrain.Journal.Tables.ReplyPublicationRecord
+
+  @spec max_inline_body_preview_bytes() :: pos_integer()
+  def max_inline_body_preview_bytes, do: ReplyBodyBoundary.max_preview_bytes()
 
   @spec provisional(String.t(), String.t(), String.t()) ::
           {:ok, ReplyPublication.t(), struct()} | {:error, term()}
@@ -21,14 +25,16 @@ defmodule OuterBrain.Bridges.ReplyBuilder do
   defp build(causal_unit_id, body, dedupe_key, phase) do
     publication_id = "#{causal_unit_id}:#{phase}"
 
-    with {:ok, publication} <-
+    with {:ok, reply_body} <- ReplyBodyBoundary.build(causal_unit_id, phase, dedupe_key, body),
+         {:ok, publication} <-
            ReplyPublication.new(%{
              publication_id: publication_id,
              causal_unit_id: causal_unit_id,
              phase: phase,
              dedupe_key: dedupe_key,
              state: :published,
-             body: body
+             body: reply_body.preview,
+             body_ref: reply_body.ref
            }),
          {:ok, row} <-
            ReplyPublicationRecord.new(%{
@@ -37,7 +43,8 @@ defmodule OuterBrain.Bridges.ReplyBuilder do
              phase: phase,
              state: :published,
              dedupe_key: dedupe_key,
-             body: body
+             body: reply_body.preview,
+             body_ref: reply_body.ref
            }) do
       {:ok, publication, row}
     end
