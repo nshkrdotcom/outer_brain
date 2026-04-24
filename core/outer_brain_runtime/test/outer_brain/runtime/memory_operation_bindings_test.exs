@@ -1,7 +1,7 @@
 defmodule OuterBrain.Runtime.MemoryOperationBindingsTest do
   use ExUnit.Case, async: true
 
-  alias OuterBrain.Memory.{PrivateWriter, RecallOrchestrator}
+  alias OuterBrain.Memory.{PrivateWriter, RecallOrchestrator, ShareUpClient}
   alias OuterBrain.Runtime.MemoryOperationBindings
 
   test "recall callbacks bind runtime owners into the recall orchestrator" do
@@ -85,6 +85,37 @@ defmodule OuterBrain.Runtime.MemoryOperationBindingsTest do
     assert [%{db_row_ref: "memory_private://row-1"}] = result.inserted_fragments
   end
 
+  test "share-up callbacks bind runtime owners into the share-up client" do
+    binding = %{
+      scope_registered?: fn _context -> {:ok, true} end,
+      share_up_policy: fn _context ->
+        {:ok,
+         %{
+           policy_ref: "share-up-policy://runtime",
+           transform_pipeline: [%{kind: :redact, fields: ["secret"]}]
+         }}
+      end,
+      share_up_transform: fn fragment, _context -> {:ok, fragment} end,
+      insert_shared: fn fragment, _context ->
+        {:ok, Map.put(fragment, :db_row_ref, "memory_shared://row-1")}
+      end,
+      share_up_proof: fn context ->
+        {:ok,
+         %{
+           proof_id: "proof://share-up/bound",
+           kind: :share_up,
+           fragment_id: context.shared_fragment.fragment_id
+         }}
+      end
+    }
+
+    assert {:ok, callbacks} = MemoryOperationBindings.share_up_callbacks(binding)
+    assert {:ok, result} = ShareUpClient.share_up(share_up_request(), callbacks)
+
+    assert result.shared_fragment.db_row_ref == "memory_shared://row-1"
+    assert result.proof_token.proof_id == "proof://share-up/bound"
+  end
+
   test "runtime binding validation fails closed on missing callback owners" do
     assert {:error, {:missing_binding, :recall_proof}} =
              MemoryOperationBindings.recall_callbacks(%{
@@ -102,6 +133,14 @@ defmodule OuterBrain.Runtime.MemoryOperationBindingsTest do
                write_transform: fn candidates, _context -> {:ok, candidates} end,
                dedupe_private: fn candidates, _context -> {:ok, candidates} end,
                insert_private: fn fragment, _context -> {:ok, fragment} end
+             })
+
+    assert {:error, {:missing_binding, :share_up_proof}} =
+             MemoryOperationBindings.share_up_callbacks(%{
+               scope_registered?: fn _context -> {:ok, true} end,
+               share_up_policy: fn _context -> {:ok, %{}} end,
+               share_up_transform: fn fragment, _context -> {:ok, fragment} end,
+               insert_shared: fn fragment, _context -> {:ok, fragment} end
              })
   end
 
@@ -128,6 +167,36 @@ defmodule OuterBrain.Runtime.MemoryOperationBindingsTest do
       commit_lsn: "16/B374D849",
       commit_hlc: %{wall_ns: 1_800_000_000_000_000_100, logical: 2, node: "writer-1"},
       effective_access: %{user_refs: ["user://alpha"], agent_refs: ["agent://alpha"]}
+    }
+  end
+
+  defp share_up_request do
+    %{
+      tenant_ref: "tenant://alpha",
+      user_ref: "user://alpha",
+      agent_ref: "agent://alpha",
+      trace_id: "trace-share-up-alpha",
+      snapshot_epoch: 42,
+      target_scope_ref: "scope://team",
+      source_node_ref: "node://memory-writer@host/writer-1",
+      commit_lsn: "16/B374D84A",
+      commit_hlc: %{wall_ns: 1_800_000_000_000_000_200, logical: 3, node: "writer-1"},
+      private_fragment: %{
+        fragment_id: "private-1",
+        tier: :private,
+        user_ref: "user://alpha",
+        source_node_ref: "node://memory-writer@host/writer-0",
+        source_agents: ["agent://alpha"],
+        source_resources: ["resource://doc"],
+        source_scopes: [],
+        access_agents: ["agent://alpha"],
+        access_resources: ["resource://doc"],
+        access_scopes: [],
+        content: %{body: "memory"},
+        content_hash: "sha256:private",
+        content_ref: %{uri: "memory_private://row"},
+        schema_ref: "schema://memory/private"
+      }
     }
   end
 

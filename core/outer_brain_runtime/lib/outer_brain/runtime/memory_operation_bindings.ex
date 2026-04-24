@@ -25,6 +25,14 @@ defmodule OuterBrain.Runtime.MemoryOperationBindings do
     :write_private_proof
   ]
 
+  @share_up_bindings [
+    :scope_registered?,
+    :share_up_policy,
+    :share_up_transform,
+    :insert_shared,
+    :share_up_proof
+  ]
+
   @spec recall_callbacks(map()) :: {:ok, keyword()} | {:error, term()}
   def recall_callbacks(bindings) when is_map(bindings) do
     with :ok <- require_bindings(bindings, @recall_bindings) do
@@ -58,6 +66,22 @@ defmodule OuterBrain.Runtime.MemoryOperationBindings do
   end
 
   def private_write_callbacks(_bindings), do: {:error, :invalid_private_write_bindings}
+
+  @spec share_up_callbacks(map()) :: {:ok, keyword()} | {:error, term()}
+  def share_up_callbacks(bindings) when is_map(bindings) do
+    with :ok <- require_bindings(bindings, @share_up_bindings) do
+      {:ok,
+       [
+         scope_registered?: fetch!(bindings, :scope_registered?),
+         share_up_policy: fetch!(bindings, :share_up_policy),
+         transform: fetch!(bindings, :share_up_transform),
+         insert_shared: fetch!(bindings, :insert_shared),
+         proof_emitter: fetch!(bindings, :share_up_proof)
+       ]}
+    end
+  end
+
+  def share_up_callbacks(_bindings), do: {:error, :invalid_share_up_bindings}
 
   defp require_bindings(bindings, required) do
     case Enum.find(required, &(not valid_binding?(bindings, &1))) do
