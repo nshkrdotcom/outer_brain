@@ -322,3 +322,143 @@ defmodule OuterBrain.Contracts.CandidateFact do
   defp bang({:ok, value}), do: value
   defp bang({:error, reason}), do: raise(ArgumentError, Atom.to_string(reason))
 end
+
+defmodule OuterBrain.Contracts.CandidateFactSet do
+  @moduledoc """
+  Phase 7 semantic extraction result for M2.
+
+  A fact set groups candidate proposals and a bounded extraction receipt. It
+  intentionally carries no private-memory commit fields; Mezzanine
+  `PrivateWriter` is the only boundary that can turn proposals into truth.
+  """
+
+  alias OuterBrain.Contracts.CandidateFact
+
+  @fields [
+    :candidate_fact_set_ref,
+    :candidate_facts,
+    :fact_extraction_receipt_ref,
+    :source_observation_refs,
+    :proposed_by,
+    :trace_id
+  ]
+
+  defstruct @fields
+
+  def new(%__MODULE__{} = set), do: {:ok, set}
+
+  def new(attrs) when is_map(attrs) do
+    with :ok <- reject_forbidden(attrs),
+         {:ok, candidate_fact_set_ref} <- required_ref(attrs, :candidate_fact_set_ref),
+         {:ok, fact_extraction_receipt_ref} <- required_ref(attrs, :fact_extraction_receipt_ref),
+         {:ok, proposed_by} <- required_ref(attrs, :proposed_by),
+         {:ok, trace_id} <- required_ref(attrs, :trace_id),
+         source_observation_refs <- get(attrs, :source_observation_refs, []),
+         true <-
+           is_list(source_observation_refs) and Enum.all?(source_observation_refs, &safe_ref?/1),
+         {:ok, candidate_facts} <- candidate_facts(get(attrs, :candidate_facts, [])) do
+      {:ok,
+       %__MODULE__{
+         candidate_fact_set_ref: candidate_fact_set_ref,
+         candidate_facts: candidate_facts,
+         fact_extraction_receipt_ref: fact_extraction_receipt_ref,
+         source_observation_refs: source_observation_refs,
+         proposed_by: proposed_by,
+         trace_id: trace_id
+       }}
+    else
+      _ -> {:error, :invalid_candidate_fact_set}
+    end
+  end
+
+  def new(_attrs), do: {:error, :invalid_candidate_fact_set}
+  def new!(attrs), do: bang(new(attrs))
+
+  def workflow_history_payload(%__MODULE__{} = set) do
+    %{
+      candidate_fact_set_ref: set.candidate_fact_set_ref,
+      candidate_fact_refs: Enum.map(set.candidate_facts, & &1.candidate_fact_ref),
+      fact_extraction_receipt_ref: set.fact_extraction_receipt_ref,
+      source_observation_refs: set.source_observation_refs,
+      trace_id: set.trace_id
+    }
+  end
+
+  def to_payload(%__MODULE__{} = set) do
+    %{
+      "candidate_fact_set_ref" => set.candidate_fact_set_ref,
+      "candidate_facts" => Enum.map(set.candidate_facts, &CandidateFact.to_payload/1),
+      "fact_extraction_receipt_ref" => set.fact_extraction_receipt_ref,
+      "source_observation_refs" => set.source_observation_refs,
+      "proposed_by" => set.proposed_by,
+      "trace_id" => set.trace_id
+    }
+  end
+
+  defp candidate_facts([_ | _] = facts) do
+    Enum.reduce_while(facts, {:ok, []}, fn attrs, {:ok, acc} ->
+      case CandidateFact.new(attrs) do
+        {:ok, fact} -> {:cont, {:ok, [fact | acc]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, facts} -> {:ok, Enum.reverse(facts)}
+      error -> error
+    end
+  end
+
+  defp candidate_facts(_facts), do: {:error, :missing_candidate_facts}
+
+  defp required_ref(attrs, key) do
+    case get(attrs, key) do
+      value when is_binary(value) ->
+        if safe_ref?(value), do: {:ok, value}, else: {:error, key}
+
+      _other ->
+        {:error, key}
+    end
+  end
+
+  defp reject_forbidden(attrs) do
+    if forbidden?(attrs), do: {:error, :forbidden_raw_payload}, else: :ok
+  end
+
+  defp forbidden?(%{} = attrs) do
+    Enum.any?(attrs, fn {key, value} -> forbidden_key?(key) or forbidden?(value) end)
+  end
+
+  defp forbidden?(values) when is_list(values), do: Enum.any?(values, &forbidden?/1)
+  defp forbidden?(value) when is_binary(value), do: String.starts_with?(value, ["/", "~/"])
+  defp forbidden?(_value), do: false
+
+  defp forbidden_key?(key) when is_atom(key), do: forbidden_key?(Atom.to_string(key))
+
+  defp forbidden_key?(key) when is_binary(key) do
+    key in [
+      "memory_commit_ref",
+      "m7a_proof_ref",
+      "prompt",
+      "raw_prompt",
+      "raw_provider_payload",
+      "raw_provider_body",
+      "provider_payload",
+      "tool_output",
+      "workspace_path"
+    ]
+  end
+
+  defp forbidden_key?(_key), do: false
+
+  defp get(attrs, key, default \\ nil) do
+    Map.get(attrs, key, Map.get(attrs, Atom.to_string(key), default))
+  end
+
+  defp safe_ref?(value),
+    do:
+      is_binary(value) and String.trim(value) != "" and
+        not String.starts_with?(value, ["/", "~/"])
+
+  defp bang({:ok, value}), do: value
+  defp bang({:error, reason}), do: raise(ArgumentError, Atom.to_string(reason))
+end
