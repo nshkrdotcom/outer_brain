@@ -36,3 +36,47 @@ just temporal-ui
 ```
 
 Do not invent raw `temporal server start-dev` commands for normal work. Do not reset local Temporal state unless the user explicitly approves `just temporal-reset-confirm`.
+
+<!-- gn-ten:repo-agent:start repo=outer_brain source_sha=ab276c0640772b73065ab12bf05d77be51f1bb67 -->
+# outer_brain Agent Instructions Draft
+
+## Owns
+
+- Semantic runtime.
+- Raw turn capture.
+- Context-pack construction.
+- Prompt and strategy shaping.
+- Tool-manifest snapshots.
+- Semantic quality checks and restart-safe publication.
+
+## Does Not Own
+
+- Policy authority.
+- Durable review truth.
+- Provider credential lifecycle.
+- Direct lower execution.
+- Product UX.
+
+## Allowed Dependencies
+
+- Citadel DomainSurface contracts.
+- GroundPlane refs.
+- Mezzanine memory/projection refs only through public contracts.
+- AITrace trace refs.
+
+## Forbidden Imports
+
+- Execution Plane lower runtimes.
+- Provider SDK execution clients as platform truth.
+- Product modules.
+
+## Verification
+
+- `mix ci`
+- Semantic failure, restart durability, and context provenance tests.
+
+## Escalation
+
+If a model-selected tool needs execution, route through Citadel and Jido
+Integration. Do not execute directly.
+<!-- gn-ten:repo-agent:end -->
