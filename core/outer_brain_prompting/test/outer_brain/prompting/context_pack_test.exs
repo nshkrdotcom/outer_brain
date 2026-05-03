@@ -1,5 +1,5 @@
 defmodule OuterBrain.Prompting.ContextPackTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias OuterBrain.Core.SemanticFrame
   alias OuterBrain.Prompting.ContextPack
@@ -54,6 +54,26 @@ defmodule OuterBrain.Prompting.ContextPackTest do
            fragment_id: "fragment-read-only",
            content: %{"summary" => "Read-only workspace fact"},
            provenance: %{"external_system_ref" => "memory://workspace/main"},
+           staleness: %{"class" => "fresh"},
+           metadata: %{"rank" => 1}
+         }
+       ]}
+    end
+  end
+
+  defmodule AmbientAdapter do
+    @behaviour OuterBrain.Prompting.ContextAdapter
+
+    @impl true
+    def fetch_fragments(request, runtime_binding) do
+      send(runtime_binding["test_pid"], {:ambient_context_adapter, request, runtime_binding})
+
+      {:ok,
+       [
+         %{
+           fragment_id: "fragment-ambient",
+           content: %{"summary" => "Ambient app env memory"},
+           provenance: %{"external_system_ref" => "memory://ambient/app-env"},
            staleness: %{"class" => "fresh"},
            metadata: %{"rank" => 1}
          }
@@ -322,7 +342,95 @@ defmodule OuterBrain.Prompting.ContextPackTest do
     assert pack.context_budget.projected_context_bytes <= pack.context_budget.max_context_bytes
   end
 
+  test "ignores ambient application env adapter registry for governed context packs" do
+    previous_registry = Application.get_env(:outer_brain_prompting, :context_adapters)
+    Application.put_env(:outer_brain_prompting, :context_adapters, %{"ambient" => AmbientAdapter})
+
+    on_exit(fn ->
+      restore_app_env(:outer_brain_prompting, :context_adapters, previous_registry)
+    end)
+
+    frame = SemanticFrame.seed("session_zeta", "answer with ambient memory blocked")
+
+    pack =
+      ContextPack.build(
+        frame,
+        ["turn_1"],
+        trace_id: "dddddddddddddddddddddddddddddddd",
+        context_sources: [
+          %{
+            source_ref: "workspace_memory",
+            binding_key: "shared_memory",
+            usage_phase: :retrieval,
+            required?: true,
+            timeout_ms: 20,
+            schema_ref: "context/workspace_memory",
+            max_fragments: 1
+          }
+        ],
+        context_bindings: %{
+          "shared_memory" => %{
+            "adapter_key" => "ambient",
+            "config" => %{"workspace" => "main"},
+            "test_pid" => self()
+          }
+        }
+      )
+
+    assert pack.fragments == []
+
+    assert [%{adapter_key: "ambient", error: {:adapter_not_registered, "ambient"}}] =
+             pack.context_sources
+
+    refute_received {:ambient_context_adapter, _request, _runtime_binding}
+  end
+
+  test "keeps standalone application env adapter registry behind explicit opt in" do
+    previous_registry = Application.get_env(:outer_brain_prompting, :context_adapters)
+    Application.put_env(:outer_brain_prompting, :context_adapters, %{"ambient" => AmbientAdapter})
+
+    on_exit(fn ->
+      restore_app_env(:outer_brain_prompting, :context_adapters, previous_registry)
+    end)
+
+    frame = SemanticFrame.seed("session_eta", "answer with standalone memory")
+
+    pack =
+      ContextPack.build(
+        frame,
+        ["turn_1"],
+        trace_id: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        context_sources: [
+          %{
+            source_ref: "workspace_memory",
+            binding_key: "shared_memory",
+            usage_phase: :retrieval,
+            required?: true,
+            timeout_ms: 20,
+            schema_ref: "context/workspace_memory",
+            max_fragments: 1
+          }
+        ],
+        context_bindings: %{
+          "shared_memory" => %{
+            "adapter_key" => "ambient",
+            "config" => %{"workspace" => "main"},
+            "test_pid" => self()
+          }
+        },
+        standalone_application_env?: true
+      )
+
+    assert_receive {:ambient_context_adapter, _request, _runtime_binding}
+    assert [fragment] = pack.fragments
+    assert fragment.provenance["adapter_key"] == "ambient"
+    assert fragment.provenance["external_system_ref"] == "memory://ambient/app-env"
+  end
+
   defp stringify_keys(map) do
     Map.new(map, fn {key, value} -> {to_string(key), value} end)
   end
+
+  defp restore_app_env(app, key, nil), do: Application.delete_env(app, key)
+  defp restore_app_env(app, key, value), do: Application.put_env(app, key, value)
 end

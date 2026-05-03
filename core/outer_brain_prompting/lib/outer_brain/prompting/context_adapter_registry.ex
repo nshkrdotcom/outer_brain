@@ -11,11 +11,13 @@ defmodule OuterBrain.Prompting.ContextAdapterRegistry do
 
     with key when is_binary(key) and byte_size(key) > 0 <- adapter_key,
          {:ok, registry} <- registry(opts),
-         module when is_atom(module) <- Map.get(registry, key) do
+         {:ok, module} <- Map.fetch(registry, key),
+         true <- is_atom(module) and not is_nil(module) do
       {:ok, module}
     else
       nil -> {:error, :missing_adapter_key}
       {:error, reason} -> {:error, reason}
+      :error -> {:error, {:adapter_not_registered, adapter_key}}
       _other -> {:error, {:adapter_not_registered, adapter_key}}
     end
   end
@@ -23,9 +25,7 @@ defmodule OuterBrain.Prompting.ContextAdapterRegistry do
   def resolve(_runtime_binding, _opts), do: {:error, :invalid_runtime_binding}
 
   defp registry(opts) do
-    registry =
-      Keyword.get(opts, :adapter_registry) ||
-        Application.get_env(:outer_brain_prompting, :context_adapters, %{})
+    registry = registry_config(opts)
 
     cond do
       is_map(registry) ->
@@ -36,6 +36,24 @@ defmodule OuterBrain.Prompting.ContextAdapterRegistry do
 
       true ->
         {:error, :invalid_adapter_registry}
+    end
+  end
+
+  defp registry_config(opts) do
+    case Keyword.fetch(opts, :adapter_registry) do
+      {:ok, registry} ->
+        registry
+
+      :error ->
+        standalone_application_env_registry(opts)
+    end
+  end
+
+  defp standalone_application_env_registry(opts) do
+    if Keyword.get(opts, :standalone_application_env?, false) do
+      Application.get_env(:outer_brain_prompting, :context_adapters, %{})
+    else
+      %{}
     end
   end
 
