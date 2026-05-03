@@ -4,6 +4,7 @@ defmodule OuterBrain.Contracts.Phase4SemanticIntegrityContractsTest do
   alias OuterBrain.Contracts.{
     ContextAdapterReadOnly,
     NormalizedSemanticResult,
+    Phase4SemanticContract,
     PrivacyRedactionFixture,
     SemanticActivityNormalized,
     SemanticContextProvenance,
@@ -187,6 +188,25 @@ defmodule OuterBrain.Contracts.Phase4SemanticIntegrityContractsTest do
                claim_check_refs: ["claim:provider-output-2"],
                routing_facts: %{}
              })
+  end
+
+  test "public nested maps normalize only known keys" do
+    assert {:ok, normalized} =
+             Phase4SemanticContract.required_map(
+               %{
+                 normalized_summary: %{
+                   "title" => "Policy answer",
+                   "body_ref" => "summary:semantic-4",
+                   "ok" => "unknown keys stay strings"
+                 }
+               },
+               :normalized_summary
+             )
+
+    assert normalized.title == "Policy answer"
+    assert normalized.body_ref == "summary:semantic-4"
+    assert normalized["ok"] == "unknown keys stay strings"
+    refute Map.has_key?(normalized, :ok)
   end
 
   test "normalized semantic result exposes the M29 workflow payload boundary contract" do

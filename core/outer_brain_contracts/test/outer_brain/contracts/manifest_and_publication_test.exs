@@ -125,4 +125,11 @@ defmodule OuterBrain.Contracts.ManifestAndPublicationTest do
                body_ref: reply_body.ref
              })
   end
+
+  test "reply body refs never create atoms from field strings" do
+    source = File.read!("lib/outer_brain/contracts/reply_body_boundary.ex")
+    forbidden_call = Enum.join(["String", "to_atom"], ".")
+
+    refute source =~ forbidden_call
+  end
 end

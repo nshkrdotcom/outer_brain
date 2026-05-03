@@ -52,6 +52,7 @@ defmodule OuterBrain.Bridges.ManifestCompiler do
   defp domain_tool_manifest_entry(entry) do
     %{
       name: Atom.to_string(entry.route_name),
+      route_atom: entry.route_name,
       description: entry.description || Atom.to_string(entry.route_name),
       input_schema_hash: entry.schema_hash,
       examples: Map.get(entry.tool_manifest, :examples, []),

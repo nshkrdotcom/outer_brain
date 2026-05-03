@@ -13,3 +13,8 @@ and this project intends to follow [Semantic Versioning](https://semver.org/spec
 - Starter README, HexDocs configuration, and documentation menu.
 - MIT license, CI workflow, and repository metadata.
 - Initial `outer_brain` SVG identity asset.
+
+### Changed
+
+- Bounded runtime decoding for semantic route atoms, recovery reasons,
+  semantic enum fields, public nested payload keys, and reply body ref fields.

@@ -51,6 +51,37 @@ defmodule OuterBrain.Contracts.ReplyBodyBoundary do
   ]
 
   @phase5_lifecycle_fields ["storage_tier", "retention_class", "fetch_policy"]
+  @ref_field_atoms %{
+    "artifact_id" => :artifact_id,
+    "content_hash" => :content_hash,
+    "content_hash_alg" => :content_hash_alg,
+    "body_hash" => :body_hash,
+    "byte_size" => :byte_size,
+    "schema_name" => :schema_name,
+    "schema_hash" => :schema_hash,
+    "schema_hash_alg" => :schema_hash_alg,
+    "media_type" => :media_type,
+    "producer_repo" => :producer_repo,
+    "tenant_scope" => :tenant_scope,
+    "sensitivity_class" => :sensitivity_class,
+    "existing_store_ref" => :existing_store_ref,
+    "store_security_posture_ref" => :store_security_posture_ref,
+    "encryption_posture_ref" => :encryption_posture_ref,
+    "retrieval_owner" => :retrieval_owner,
+    "existing_fetch_or_restore_path" => :existing_fetch_or_restore_path,
+    "safe_actions" => :safe_actions,
+    "queue_key" => :queue_key,
+    "oversize_action" => :oversize_action,
+    "release_manifest_ref" => :release_manifest_ref,
+    "redaction_manifest_ref" => :redaction_manifest_ref,
+    "causal_unit_id" => :causal_unit_id,
+    "phase" => :phase,
+    "dedupe_key" => :dedupe_key,
+    "preview_hash" => :preview_hash,
+    "storage_tier" => :storage_tier,
+    "retention_class" => :retention_class,
+    "fetch_policy" => :fetch_policy
+  }
 
   @type body_ref :: %{String.t() => term()}
   @type built :: %{preview: String.t(), ref: body_ref()}
@@ -272,6 +303,9 @@ defmodule OuterBrain.Contracts.ReplyBodyBoundary do
   defp blank?(value), do: is_nil(value) or value == "" or value == []
 
   defp field_value(ref, field) do
-    Map.get(ref, field) || Map.get(ref, String.to_atom(field))
+    case Map.fetch(ref, field) do
+      {:ok, value} -> value
+      :error -> Map.get(ref, Map.fetch!(@ref_field_atoms, field))
+    end
   end
 end

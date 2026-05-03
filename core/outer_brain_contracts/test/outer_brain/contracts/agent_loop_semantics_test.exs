@@ -31,6 +31,18 @@ defmodule OuterBrain.Contracts.AgentLoopSemanticsTest do
              })
   end
 
+  test "ReflectionResult rejects unknown string variants without atom decoding" do
+    assert {:error, :invalid_reflection_result} =
+             ReflectionResult.new(%{
+               result_ref: "reflection://turn-1",
+               variant: "not_a_reflection_variant",
+               action_request_ref: "action://turn-1",
+               risk_band: :low,
+               confidence_band: :high,
+               trace_id: "trace://local/1"
+             })
+  end
+
   test "CandidateFact proposals carry refs, confidence/risk bands, and no raw payloads" do
     assert {:ok, fact} =
              CandidateFact.new(%{
@@ -69,6 +81,13 @@ defmodule OuterBrain.Contracts.AgentLoopSemanticsTest do
                trace_id: "trace://local/1",
                raw_provider_payload: %{}
              })
+  end
+
+  test "CandidateFact rejects unknown string enums without atom decoding" do
+    assert {:error, :invalid_candidate_fact} =
+             candidate_fact_attrs()
+             |> Map.put(:fact_kind, "not_a_fact_kind")
+             |> CandidateFact.new()
   end
 
   test "CandidateFactSet remains proposal-shaped and cannot claim private memory truth" do

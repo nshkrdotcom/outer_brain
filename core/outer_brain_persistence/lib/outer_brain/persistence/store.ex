@@ -23,6 +23,8 @@ defmodule OuterBrain.Persistence.Store do
   }
 
   @semantic_failure_entry_type "semantic_failure"
+  @recovery_reasons [:ambiguous_submission]
+  @recovery_reasons_by_schema Map.new(@recovery_reasons, &{Atom.to_string(&1), &1})
 
   @spec acquire_lease(Lease.t(), DateTime.t(), keyword()) ::
           {:ok, :acquired | :renewed, Lease.t()} | {:error, term()}
@@ -78,8 +80,11 @@ defmodule OuterBrain.Persistence.Store do
   end
 
   @spec record_recovery_task(RecoveryTaskRecord.t(), keyword()) ::
-          {:ok, RecoveryTaskRecord.t()} | {:error, Ecto.Changeset.t()}
-  def record_recovery_task(%RecoveryTaskRecord{} = task, opts \\ []) do
+          {:ok, RecoveryTaskRecord.t()} | {:error, Ecto.Changeset.t() | term()}
+  def record_recovery_task(task, opts \\ [])
+
+  def record_recovery_task(%RecoveryTaskRecord{reason: reason} = task, opts)
+      when reason in @recovery_reasons do
     repo = repo(opts)
 
     changeset =
@@ -98,6 +103,9 @@ defmodule OuterBrain.Persistence.Store do
       {:error, changeset} -> {:error, changeset}
     end
   end
+
+  def record_recovery_task(%RecoveryTaskRecord{} = task, _opts),
+    do: {:error, {:invalid_recovery_task_reason, task.reason}}
 
   @spec pending_recovery_tasks(String.t(), keyword()) :: [RecoveryTaskRecord.t()]
   def pending_recovery_tasks(session_id, opts \\ []) when is_binary(session_id) do
@@ -374,9 +382,19 @@ defmodule OuterBrain.Persistence.Store do
     %RecoveryTaskRecord{
       task_id: schema.task_id,
       session_id: schema.session_id,
-      reason: String.to_existing_atom(schema.reason),
+      reason: recovery_reason!(schema.reason),
       status: schema.status
     }
+  end
+
+  defp recovery_reason!(reason) when is_binary(reason) do
+    case Map.fetch(@recovery_reasons_by_schema, reason) do
+      {:ok, reason_atom} ->
+        reason_atom
+
+      :error ->
+        raise ArgumentError, "unknown recovery task reason: #{inspect(reason)}"
+    end
   end
 
   defp schema_to_reply_publication(schema) do

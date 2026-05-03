@@ -8,6 +8,7 @@ defmodule OuterBrain.Contracts.ToolManifestSnapshot do
   @type route_metadata :: %{
           required(:description) => String.t(),
           required(:input_schema_hash) => String.t(),
+          optional(:route_atom) => atom(),
           optional(:examples) => [map()]
         }
 

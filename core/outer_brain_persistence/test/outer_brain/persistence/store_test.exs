@@ -12,6 +12,7 @@ defmodule OuterBrain.Persistence.StoreTest do
   }
 
   alias OuterBrain.Persistence.{PostgresContainer, Repo, Store}
+  alias OuterBrain.Persistence.Schemas.RecoveryTask, as: RecoveryTaskSchema
 
   setup_all do
     container = PostgresContainer.start!("outer_brain_persistence")
@@ -127,6 +128,19 @@ defmodule OuterBrain.Persistence.StoreTest do
 
     assert [^recovery_task] = Store.pending_recovery_tasks("session_alpha", repo: repo)
     assert :final == Store.latest_publication_phase("causal_1", repo: repo)
+  end
+
+  test "pending recovery tasks reject unknown persisted reasons", %{repo: repo} do
+    repo.insert!(%RecoveryTaskSchema{
+      task_id: "recovery_unknown_reason",
+      session_id: "session_alpha",
+      reason: "not_a_recovery_reason",
+      status: :pending
+    })
+
+    assert_raise ArgumentError, ~r/unknown recovery task reason/, fn ->
+      Store.pending_recovery_tasks("session_alpha", repo: repo)
+    end
   end
 
   defp lease!(session_id, holder, lease_id, epoch, expires_at) do

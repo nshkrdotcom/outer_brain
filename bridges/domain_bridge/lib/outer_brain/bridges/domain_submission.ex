@@ -35,6 +35,7 @@ defmodule OuterBrain.Bridges.DomainSubmission do
     with {:ok, domain_request} <-
            build_domain_request(
              normalized.domain_module,
+             snapshot,
              action_request,
              normalized.domain_request_opts
            ),
@@ -71,20 +72,33 @@ defmodule OuterBrain.Bridges.DomainSubmission do
     ActionRequestCompiler.compile(frame, snapshot, selection, confidence)
   end
 
-  defp build_domain_request(domain_module, %ActionRequest{} = request, domain_request_opts) do
-    route_name = String.to_existing_atom(request.route)
+  defp build_domain_request(
+         domain_module,
+         snapshot,
+         %ActionRequest{} = request,
+         domain_request_opts
+       ) do
+    with {:ok, route_name} <- manifest_route_atom(snapshot, request.route) do
+      Code.ensure_loaded!(domain_module)
 
-    Code.ensure_loaded!(domain_module)
-
-    if function_exported?(domain_module, route_name, 2) do
-      apply(domain_module, route_name, [request.args, domain_request_opts])
-    else
-      {:error, {:unknown_domain_route, domain_module, route_name}}
+      if function_exported?(domain_module, route_name, 2) do
+        apply(domain_module, route_name, [request.args, domain_request_opts])
+      else
+        {:error, {:unknown_domain_route, domain_module, route_name}}
+      end
     end
-  rescue
-    _error in ArgumentError ->
-      {:error, {:unknown_domain_route, domain_module, request.route}}
   end
+
+  defp manifest_route_atom(%{routes: routes}, route) when is_map(routes) and is_binary(route) do
+    with {:ok, metadata} <- Map.fetch(routes, route),
+         route_name when is_atom(route_name) <- Map.get(metadata, :route_atom) do
+      {:ok, route_name}
+    else
+      _other -> {:error, {:unknown_domain_route, route}}
+    end
+  end
+
+  defp manifest_route_atom(_snapshot, route), do: {:error, {:unknown_domain_route, route}}
 
   defp normalize_opts(opts) when is_list(opts) do
     with {:ok, session_id} <- required_string(opts, :session_id),
@@ -168,6 +182,8 @@ defmodule OuterBrain.Bridges.DomainSubmission do
 
   defp semantic_failure_kind({:unknown_domain_route, _module, _route}),
     do: :semantic_tool_mismatch
+
+  defp semantic_failure_kind({:unknown_domain_route, _route}), do: :semantic_tool_mismatch
 
   defp semantic_failure_kind(_reason), do: :semantic_invalid_output
 

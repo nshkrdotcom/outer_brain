@@ -38,6 +38,73 @@ defmodule OuterBrain.Contracts.Phase4SemanticContract do
     "Credential"
   ]
 
+  @known_nested_key_atoms @scope_fields ++
+                            @forbidden_public_fields ++
+                            [
+                              :principal_ref,
+                              :system_actor_ref,
+                              :semantic_ref,
+                              :provider_ref,
+                              :model_ref,
+                              :prompt_hash,
+                              :context_hash,
+                              :input_claim_check_ref,
+                              :output_claim_check_ref,
+                              :provenance_refs,
+                              :normalizer_version,
+                              :redaction_policy_ref,
+                              :semantic_idempotency_key,
+                              :suppression_ref,
+                              :duplicate_of_ref,
+                              :routing_fact_hash,
+                              :publication_ref,
+                              :operator_visibility,
+                              :reason_code,
+                              :adapter_ref,
+                              :allowed_read_resources,
+                              :denied_write_resources,
+                              :read_claim_check_ref,
+                              :mutation_scan_ref,
+                              :mutation_permissions,
+                              :claim_check_refs,
+                              :normalized_summary,
+                              :routing_facts,
+                              :validation_state,
+                              :diagnostics_ref,
+                              :retry_class,
+                              :terminal_class,
+                              :workflow_history_payload,
+                              :title,
+                              :body_ref,
+                              :review_required,
+                              :semantic_score,
+                              :confidence_band,
+                              :risk_band,
+                              :schema_validation_state,
+                              :normalization_warning_count,
+                              :semantic_retry_class,
+                              :review_reason_code,
+                              :raw_field_name,
+                              :public_field_name,
+                              :redaction_class,
+                              :fixture_ref,
+                              :scan_ref,
+                              :public_payload,
+                              :search_attributes,
+                              :suppression_kind,
+                              :target_ref,
+                              :recovery_action_refs,
+                              :recall_proof_token_ref,
+                              :snapshot_epoch,
+                              :source_node_ref,
+                              :commit_lsn,
+                              :commit_hlc,
+                              :wall_ns,
+                              :logical,
+                              :node
+                            ]
+  @known_nested_keys_by_string Map.new(@known_nested_key_atoms, &{Atom.to_string(&1), &1})
+
   @spec scope_fields() :: [atom()]
   def scope_fields, do: @scope_fields
 
@@ -128,11 +195,9 @@ defmodule OuterBrain.Contracts.Phase4SemanticContract do
   @spec normalize_known_keys(map()) :: map()
   def normalize_known_keys(map) when is_map(map) do
     Map.new(map, fn
-      {key, value} when is_binary(key) -> {String.to_existing_atom(key), value}
+      {key, value} when is_binary(key) -> {known_key(key), value}
       {key, value} -> {key, value}
     end)
-  rescue
-    ArgumentError -> map
   end
 
   @spec atom_value(map(), atom(), [atom()]) :: {:ok, atom()} | {:error, term()}
@@ -225,6 +290,10 @@ defmodule OuterBrain.Contracts.Phase4SemanticContract do
       nil -> {:error, {:invalid_enum, field}}
       atom -> {:ok, atom}
     end
+  end
+
+  defp known_key(key) do
+    Map.get(@known_nested_keys_by_string, key, key)
   end
 
   defp scalar?(value)

@@ -8,7 +8,9 @@ defmodule OuterBrain.Contracts.ReflectionResult do
   """
 
   @variants [:action_request, :final_answer, :clarification_request, :semantic_failure]
-  @bands [:low, :medium, :high, "low", "medium", "high"]
+  @variant_by_string Map.new(@variants, &{Atom.to_string(&1), &1})
+  @bands [:low, :medium, :high]
+  @band_by_string Map.new(@bands, &{Atom.to_string(&1), &1})
   @variant_fields %{
     action_request: :action_request_ref,
     final_answer: :final_answer_ref,
@@ -52,8 +54,8 @@ defmodule OuterBrain.Contracts.ReflectionResult do
            final_answer_ref: get(attrs, :final_answer_ref),
            clarification_request_ref: get(attrs, :clarification_request_ref),
            semantic_failure_ref: get(attrs, :semantic_failure_ref),
-           risk_band: normalize_atom(risk_band),
-           confidence_band: normalize_atom(confidence_band),
+           risk_band: risk_band,
+           confidence_band: confidence_band,
            trace_id: trace_id,
            diagnostics: diagnostics
          }
@@ -87,10 +89,7 @@ defmodule OuterBrain.Contracts.ReflectionResult do
   end
 
   defp variant(attrs) do
-    case normalize_atom(get(attrs, :variant)) do
-      variant when variant in @variants -> {:ok, variant}
-      _other -> {:error, :invalid_variant}
-    end
+    enum_value(get(attrs, :variant), @variants, @variant_by_string, :invalid_variant)
   end
 
   defp exactly_one_variant(attrs, variant) do
@@ -109,11 +108,17 @@ defmodule OuterBrain.Contracts.ReflectionResult do
   defp variant_field(variant), do: Map.fetch!(@variant_fields, variant)
 
   defp band(attrs, key) do
-    case get(attrs, key) do
-      value when value in @bands -> {:ok, value}
-      _other -> {:error, :invalid_band}
-    end
+    enum_value(get(attrs, key), @bands, @band_by_string, :invalid_band)
   end
+
+  defp enum_value(value, allowed, _by_string, error) when is_atom(value) do
+    if value in allowed, do: {:ok, value}, else: {:error, error}
+  end
+
+  defp enum_value(value, _allowed, by_string, _error) when is_binary(value),
+    do: Map.fetch(by_string, value)
+
+  defp enum_value(_value, _allowed, _by_string, error), do: {:error, error}
 
   defp required_ref(attrs, key) do
     case get(attrs, key) do
@@ -162,8 +167,6 @@ defmodule OuterBrain.Contracts.ReflectionResult do
       is_binary(value) and String.trim(value) != "" and
         not String.starts_with?(value, ["/", "~/"])
 
-  defp normalize_atom(value) when is_binary(value), do: String.to_existing_atom(value)
-  defp normalize_atom(value), do: value
   defp dump_value(value) when is_atom(value), do: Atom.to_string(value)
   defp dump_value(values) when is_list(values), do: Enum.map(values, &dump_value/1)
   defp dump_value(value), do: value
@@ -181,9 +184,13 @@ defmodule OuterBrain.Contracts.CandidateFact do
   """
 
   @fact_kinds [:tool_observation, :runtime_summary, :user_preference, :project_fact]
+  @fact_kinds_by_string Map.new(@fact_kinds, &{Atom.to_string(&1), &1})
   @confidence_classes [:observed, :inferred, :reported]
+  @confidence_classes_by_string Map.new(@confidence_classes, &{Atom.to_string(&1), &1})
   @redaction_classes [:claim_checked, :public_summary, :redacted]
+  @redaction_classes_by_string Map.new(@redaction_classes, &{Atom.to_string(&1), &1})
   @bands [:low, :medium, :high]
+  @bands_by_string Map.new(@bands, &{Atom.to_string(&1), &1})
   @fields [
     :candidate_fact_ref,
     :fact_kind,
@@ -211,11 +218,19 @@ defmodule OuterBrain.Contracts.CandidateFact do
          {:ok, redaction_ref} <- required_ref(attrs, :redaction_ref),
          {:ok, proposed_by} <- required_ref(attrs, :proposed_by),
          {:ok, trace_id} <- required_ref(attrs, :trace_id),
-         {:ok, fact_kind} <- atom_value(attrs, :fact_kind, @fact_kinds),
-         {:ok, confidence_class} <- atom_value(attrs, :confidence_class, @confidence_classes),
-         {:ok, confidence_band} <- atom_value(attrs, :confidence_band, @bands),
-         {:ok, risk_band} <- atom_value(attrs, :risk_band, @bands),
-         {:ok, redaction_class} <- atom_value(attrs, :redaction_class, @redaction_classes),
+         {:ok, fact_kind} <- atom_value(attrs, :fact_kind, @fact_kinds, @fact_kinds_by_string),
+         {:ok, confidence_class} <-
+           atom_value(
+             attrs,
+             :confidence_class,
+             @confidence_classes,
+             @confidence_classes_by_string
+           ),
+         {:ok, confidence_band} <-
+           atom_value(attrs, :confidence_band, @bands, @bands_by_string),
+         {:ok, risk_band} <- atom_value(attrs, :risk_band, @bands, @bands_by_string),
+         {:ok, redaction_class} <-
+           atom_value(attrs, :redaction_class, @redaction_classes, @redaction_classes_by_string),
          claim_check_refs <- get(attrs, :claim_check_refs, []),
          true <- is_list(claim_check_refs) and Enum.all?(claim_check_refs, &safe_ref?/1) do
       {:ok,
@@ -261,11 +276,20 @@ defmodule OuterBrain.Contracts.CandidateFact do
     |> Enum.into(%{}, fn {key, value} -> {Atom.to_string(key), dump_value(value)} end)
   end
 
-  defp atom_value(attrs, key, allowed) do
-    value = normalize_atom(get(attrs, key))
+  defp atom_value(attrs, key, allowed, by_string) do
+    case get(attrs, key) do
+      value when is_atom(value) ->
+        if value in allowed, do: {:ok, value}, else: {:error, key}
 
-    if value in allowed, do: {:ok, value}, else: {:error, key}
+      value when is_binary(value) ->
+        atom_from_string(value, by_string)
+
+      _other ->
+        {:error, key}
+    end
   end
+
+  defp atom_from_string(value, by_string), do: Map.fetch(by_string, value)
 
   defp required_ref(attrs, key) do
     case get(attrs, key) do
@@ -314,8 +338,6 @@ defmodule OuterBrain.Contracts.CandidateFact do
       is_binary(value) and String.trim(value) != "" and
         not String.starts_with?(value, ["/", "~/"])
 
-  defp normalize_atom(value) when is_binary(value), do: String.to_existing_atom(value)
-  defp normalize_atom(value), do: value
   defp dump_value(value) when is_atom(value), do: Atom.to_string(value)
   defp dump_value(values) when is_list(values), do: Enum.map(values, &dump_value/1)
   defp dump_value(value), do: value

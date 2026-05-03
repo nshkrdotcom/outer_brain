@@ -30,6 +30,7 @@ defmodule OuterBrain.Bridges.ManifestCompilerTest do
 
     assert snapshot.manifest_id == "manifest_domain"
     assert snapshot.routes["compile_workspace"].request_type == :command
+    assert snapshot.routes["compile_workspace"].route_atom == :compile_workspace
     assert snapshot.routes["compile_workspace"].semantic_metadata.category == :workspace
   end
 end
