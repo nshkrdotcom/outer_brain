@@ -138,9 +138,12 @@ defmodule OuterBrain.Persistence.StoreTest do
       status: :pending
     })
 
-    assert_raise ArgumentError, ~r/unknown recovery task reason/, fn ->
-      Store.pending_recovery_tasks("session_alpha", repo: repo)
-    end
+    error =
+      assert_raise ArgumentError, fn ->
+        Store.pending_recovery_tasks("session_alpha", repo: repo)
+      end
+
+    assert String.contains?(Exception.message(error), "unknown recovery task reason")
   end
 
   defp lease!(session_id, holder, lease_id, epoch, expires_at) do

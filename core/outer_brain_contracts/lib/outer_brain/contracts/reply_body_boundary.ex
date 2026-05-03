@@ -20,7 +20,6 @@ defmodule OuterBrain.Contracts.ReplyBodyBoundary do
                              )
   @redaction_manifest_ref @redaction_manifest_name <> ":" <> @redaction_manifest_hash
   @release_manifest_ref "phase5-v7-m4-artifact-boundary"
-  @sha256_regex ~r/\Asha256:[0-9a-f]{64}\z/
 
   @required_ref_fields [
     "artifact_id",
@@ -204,18 +203,137 @@ defmodule OuterBrain.Contracts.ReplyBodyBoundary do
   def body_hash(_ref), do: nil
 
   defp redact(body) do
-    redacted_email =
-      Regex.replace(
-        ~r/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i,
-        body,
-        "[REDACTED_EMAIL]"
-      )
+    body
+    |> rewrite_tokens(&redact_email_token/1)
+    |> rewrite_tokens(&redact_secret_assignment_token/1)
+  end
 
-    Regex.replace(
-      ~r/(?i)\b(api[_-]?key|token|password|secret)\s*[:=]\s*[^\s]+/,
-      redacted_email,
-      "\\1=[REDACTED]"
-    )
+  defp rewrite_tokens(body, fun) do
+    body
+    |> split_preserving_space()
+    |> Enum.map(fn
+      {:token, token} -> fun.(token)
+      {:space, space} -> space
+    end)
+    |> IO.iodata_to_binary()
+  end
+
+  defp split_preserving_space(body) do
+    body
+    |> String.graphemes()
+    |> Enum.reduce({[], ""}, &split_segment/2)
+    |> finalize_segments()
+  end
+
+  defp split_segment(grapheme, {segments, token}) do
+    if whitespace?(grapheme) do
+      {[{:space, grapheme} | maybe_token_segment(segments, token)], ""}
+    else
+      {segments, token <> grapheme}
+    end
+  end
+
+  defp finalize_segments({segments, token}) do
+    segments
+    |> maybe_token_segment(token)
+    |> Enum.reverse()
+  end
+
+  defp maybe_token_segment(segments, ""), do: segments
+  defp maybe_token_segment(segments, token), do: [{:token, token} | segments]
+
+  defp whitespace?(grapheme), do: grapheme in [" ", "\n", "\r", "\t"]
+
+  defp redact_email_token(token) do
+    {core, suffix} = split_trailing_punctuation(token)
+
+    if email_core?(core) do
+      "[REDACTED_EMAIL]" <> suffix
+    else
+      token
+    end
+  end
+
+  defp split_trailing_punctuation(token) do
+    token
+    |> String.graphemes()
+    |> Enum.reverse()
+    |> Enum.split_while(&(&1 in [".", ",", ";", ":", ")", "]", "}"]))
+    |> then(fn {suffix, core} ->
+      {core |> Enum.reverse() |> Enum.join(), suffix |> Enum.reverse() |> Enum.join()}
+    end)
+  end
+
+  defp email_core?(core) do
+    case String.split(core, "@", parts: 3) do
+      [local, domain] ->
+        local != "" and email_local?(local) and email_domain?(domain)
+
+      _other ->
+        false
+    end
+  end
+
+  defp email_local?(local) do
+    local
+    |> :binary.bin_to_list()
+    |> Enum.all?(fn byte -> alpha_num?(byte) or byte in [?., ?_, ?%, ?+, ?-] end)
+  end
+
+  defp email_domain?(domain) do
+    parts = String.split(domain, ".")
+    last = List.last(parts)
+
+    length(parts) >= 2 and Enum.all?(parts, &(&1 != "" and email_domain_part?(&1))) and
+      is_binary(last) and byte_size(last) >= 2 and all_alpha?(last)
+  end
+
+  defp email_domain_part?(part) do
+    part
+    |> :binary.bin_to_list()
+    |> Enum.all?(fn byte -> alpha_num?(byte) or byte == ?- end)
+  end
+
+  defp redact_secret_assignment_token(token) do
+    case assignment_parts(token) do
+      {key, delimiter, value} when value != "" ->
+        if secret_key?(key), do: key <> delimiter <> "[REDACTED]", else: token
+
+      _other ->
+        token
+    end
+  end
+
+  defp assignment_parts(token) do
+    with {:ok, delimiter_index, delimiter} <- first_assignment_delimiter(token),
+         key when key != "" <- binary_part(token, 0, delimiter_index),
+         value <- binary_part(token, delimiter_index + 1, byte_size(token) - delimiter_index - 1) do
+      {key, <<delimiter>>, value}
+    else
+      _other -> :error
+    end
+  end
+
+  defp first_assignment_delimiter(token) do
+    token
+    |> :binary.bin_to_list()
+    |> Enum.with_index()
+    |> Enum.find(fn {byte, _index} -> byte in [?=, ?:] end)
+    |> case do
+      {byte, index} -> {:ok, index, byte}
+      nil -> :error
+    end
+  end
+
+  defp secret_key?(key) do
+    case key |> String.downcase() |> String.replace("-", "_") do
+      "api_key" -> true
+      "apikey" -> true
+      "token" -> true
+      "password" -> true
+      "secret" -> true
+      _other -> false
+    end
   end
 
   defp bounded_preview(body) do
@@ -269,7 +387,7 @@ defmodule OuterBrain.Contracts.ReplyBodyBoundary do
       alg != "sha256" ->
         {:error, {:invalid_primary_hash, alg_field}}
 
-      not (is_binary(hash) and Regex.match?(@sha256_regex, hash)) ->
+      not sha256_ref?(hash) ->
         {:error, {:invalid_primary_hash, hash_field}}
 
       true ->
@@ -301,6 +419,25 @@ defmodule OuterBrain.Contracts.ReplyBodyBoundary do
   defp present?(ref, field), do: not blank?(field_value(ref, field))
 
   defp blank?(value), do: is_nil(value) or value == "" or value == []
+
+  defp sha256_ref?(<<"sha256:", digest::binary-size(64)>>), do: lower_hex?(digest)
+  defp sha256_ref?(_hash), do: false
+
+  defp lower_hex?(value) do
+    value
+    |> :binary.bin_to_list()
+    |> Enum.all?(fn byte -> byte in ?0..?9 or byte in ?a..?f end)
+  end
+
+  defp all_alpha?(value) do
+    value
+    |> :binary.bin_to_list()
+    |> Enum.all?(&alpha?/1)
+  end
+
+  defp alpha?(byte), do: byte in ?A..?Z or byte in ?a..?z
+
+  defp alpha_num?(byte), do: alpha?(byte) or byte in ?0..?9
 
   defp field_value(ref, field) do
     case Map.fetch(ref, field) do
