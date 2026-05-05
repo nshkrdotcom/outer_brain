@@ -11,6 +11,7 @@ defmodule OuterBrain.Workspace do
     "core/outer_brain_prompting",
     "core/outer_brain_quality",
     "core/outer_brain_runtime",
+    "core/outer_brain_authority_evidence",
     "core/outer_brain_restart_authority",
     "bridges/domain_bridge",
     "bridges/citadel_bridge",

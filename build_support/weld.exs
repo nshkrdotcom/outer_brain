@@ -8,7 +8,8 @@ defmodule OuterBrain.Build.WeldContract do
     "docs/overview.md",
     "docs/layout.md",
     "docs/runtime_model.md",
-    "docs/integration_surface.md"
+    "docs/integration_surface.md",
+    "core/outer_brain_authority_evidence/README.md"
   ]
 
   def manifest do
@@ -32,7 +33,7 @@ defmodule OuterBrain.Build.WeldContract do
 
   def artifact do
     [
-      roots: ["core/outer_brain_contracts"],
+      roots: ["core/outer_brain_contracts", "core/outer_brain_authority_evidence"],
       package: [
         name: "outer_brain_contracts",
         otp_app: :outer_brain_contracts,
