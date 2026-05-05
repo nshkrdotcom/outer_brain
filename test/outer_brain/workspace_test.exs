@@ -1,6 +1,9 @@
 defmodule OuterBrain.WorkspaceTest do
   use ExUnit.Case, async: true
 
+  Code.require_file("build_support/weld.exs", File.cwd!())
+
+  alias OuterBrain.Build.WeldContract
   alias OuterBrain.Build.WorkspaceContract
   alias OuterBrain.Workspace
   alias OuterBrain.Workspace.MixProject
@@ -42,6 +45,10 @@ defmodule OuterBrain.WorkspaceTest do
     refute Keyword.has_key?(aliases, :"release.prepare")
     refute Keyword.has_key?(aliases, :"release.track")
     refute Keyword.has_key?(aliases, :"release.archive")
+  end
+
+  test "weld projection docs main points at generated root README page" do
+    assert WeldContract.artifact()[:package][:docs_main] == "readme-1"
   end
 
   test "child packages do not hard-code sibling repo paths" do

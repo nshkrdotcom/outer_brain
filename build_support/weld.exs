@@ -38,7 +38,8 @@ defmodule OuterBrain.Build.WeldContract do
         name: "outer_brain_contracts",
         otp_app: :outer_brain_contracts,
         version: "0.1.0",
-        description: "Projected semantic-runtime contract package from the OuterBrain workspace"
+        description: "Projected semantic-runtime contract package from the OuterBrain workspace",
+        docs_main: "readme-1"
       ],
       output: [
         docs: @artifact_docs,
