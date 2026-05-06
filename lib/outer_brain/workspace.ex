@@ -21,6 +21,8 @@ defmodule OuterBrain.Workspace do
     "core/guardrail_contracts",
     "core/guardrail_engine",
     "core/eval_runner",
+    "core/ai_artifact_contracts",
+    "core/optimization_artifact_store",
     "bridges/domain_bridge",
     "bridges/citadel_bridge",
     "bridges/publication_bridge",

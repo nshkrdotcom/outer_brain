@@ -12,6 +12,8 @@ Key groups:
 - `core/outer_brain_quality`
 - `core/outer_brain_runtime`
 - `core/outer_brain_restart_authority`
+- `core/ai_artifact_contracts`
+- `core/optimization_artifact_store`
 - `bridges/*`
 - `apps/host_surface`
 - `examples/*`

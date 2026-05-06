@@ -11,6 +11,8 @@ defmodule OuterBrain.WorkspaceTest do
   test "lists workspace packages" do
     assert "core/outer_brain_contracts" in Workspace.package_paths()
     assert "core/outer_brain_persistence" in Workspace.package_paths()
+    assert "core/ai_artifact_contracts" in Workspace.package_paths()
+    assert "core/optimization_artifact_store" in Workspace.package_paths()
     assert "bridges/citadel_bridge" in Workspace.package_paths()
     assert "examples/console_chat" in Workspace.package_paths()
   end

@@ -48,6 +48,8 @@ defmodule OuterBrain.Build.WeldContract do
           "core/guardrail_contracts",
           "core/guardrail_engine",
           "core/eval_runner",
+          "core/ai_artifact_contracts",
+          "core/optimization_artifact_store",
           "examples/console_chat",
           "examples/direct_citadel_action"
         ]

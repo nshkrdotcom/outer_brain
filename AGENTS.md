@@ -14,6 +14,8 @@
 - `./core/outer_brain_quality/mix.exs`: Semantic quality checkpoint and critic helpers for OuterBrain
 - `./core/outer_brain_restart_authority/mix.exs`: Restart scan and reconcile helpers for OuterBrain
 - `./core/outer_brain_runtime/mix.exs`: Live session ownership, wake coordination, and streaming control for OuterBrain
+- `./core/ai_artifact_contracts/mix.exs`: Ref-only adaptive artifact identity contracts
+- `./core/optimization_artifact_store/mix.exs`: Ref-only adaptive optimization artifact graph history
 - `./examples/console_chat/mix.exs`: Console-chat smoke example for the OuterBrain workspace
 - `./examples/direct_citadel_action/mix.exs`: Direct action-compilation smoke example for the OuterBrain workspace
 - `./mix.exs`: Workspace root for the OuterBrain semantic-runtime monorepo

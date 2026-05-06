@@ -52,3 +52,18 @@ class.
 Context adapters are read-only contributors to context-pack assembly. They
 receive bounded request data and runtime binding configuration, return
 provenance-bearing fragments, and do not own semantic-session truth.
+
+## Adaptive Artifact Identity
+
+`core/ai_artifact_contracts` owns ref-only adaptive artifact identity for
+prompt, role, skill, GEPA component, candidate, candidate delta, objective,
+eval, replay, router, verifier, provider pool, model profile, endpoint
+profile, promotion, and rollback refs. `core/optimization_artifact_store` owns
+ref-only graph history for candidate lineage, policy artifacts, eval evidence,
+promotion, and rollback decisions.
+
+Both packages project refs, bounded classes, lineage refs, rollback refs, trace
+refs, and redaction policy refs only. They do not store raw prompts, memory
+bodies, provider payloads, model outputs, credentials, provider SDK clients,
+execution runtime state, or product UX state. `jido_skill` is outside the
+adaptive scope; skill capabilities are represented as OuterBrain-owned refs.

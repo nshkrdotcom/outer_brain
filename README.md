@@ -40,6 +40,14 @@ Active workspace buildout. The repo uses a non-umbrella workspace layout with
 core packages, a dedicated raw-Ecto persistence layer, bridges, a host surface,
 and proving examples.
 
+Adaptive layer additions:
+
+- `core/ai_artifact_contracts`: ref-only artifact identity for prompt, role,
+  skill, GEPA, eval, replay, router, provider, endpoint, promotion, and
+  rollback refs.
+- `core/optimization_artifact_store`: ref-only artifact graph history for
+  candidate lineage, eval evidence, promotion, and rollback decisions.
+
 ## Development
 
 The project targets Elixir `~> 1.19` and Erlang/OTP `28`. The pinned toolchain
