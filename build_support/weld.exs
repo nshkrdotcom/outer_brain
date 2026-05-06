@@ -23,7 +23,14 @@ defmodule OuterBrain.Build.WeldContract do
         proofs: ["examples/console_chat", "examples/direct_citadel_action"]
       ],
       publication: [
-        internal_only: [".", "examples/console_chat", "examples/direct_citadel_action"]
+        internal_only: [
+          ".",
+          "core/memory_contracts",
+          "core/memory_engine",
+          "core/context_budget",
+          "examples/console_chat",
+          "examples/direct_citadel_action"
+        ]
       ],
       artifacts: [
         outer_brain_contracts: artifact()
