@@ -85,3 +85,7 @@ Do not invent raw `temporal server start-dev` commands for normal work. Do not r
 If a model-selected tool needs execution, route through Citadel and Jido
 Integration. Do not execute directly.
 <!-- gn-ten:repo-agent:end -->
+
+## Blitz 0.3.0 operational note
+
+Root workspace Blitz uses published Hex `~> 0.3.0` by default; `.blitz/` is committed compact impact state after green QC. Source and `mix.exs` changes cascade through reverse workspace dependencies; docs-only changes should stay owner-local.
