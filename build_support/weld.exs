@@ -3,6 +3,8 @@ Code.require_file("workspace_contract.exs", __DIR__)
 defmodule OuterBrain.Build.WeldContract do
   @moduledoc false
 
+  @repo_root Path.expand("..", __DIR__)
+
   @artifact_docs [
     "README.md",
     "docs/overview.md",
@@ -10,6 +12,19 @@ defmodule OuterBrain.Build.WeldContract do
     "docs/runtime_model.md",
     "docs/integration_surface.md",
     "core/outer_brain_authority_evidence/README.md"
+  ]
+
+  @mezzanine_repo_path Path.expand("../mezzanine", @repo_root)
+
+  @dependencies [
+    mezzanine_eval_engine: [
+      opts:
+        if File.dir?(@mezzanine_repo_path) do
+          [git: @mezzanine_repo_path, sparse: "core/eval_engine"]
+        else
+          [github: "nshkrdotcom/mezzanine", branch: "main", sparse: "core/eval_engine"]
+        end
+    ]
   ]
 
   def manifest do
@@ -31,10 +46,12 @@ defmodule OuterBrain.Build.WeldContract do
           "core/prompt_fabric",
           "core/guardrail_contracts",
           "core/guardrail_engine",
+          "core/eval_runner",
           "examples/console_chat",
           "examples/direct_citadel_action"
         ]
       ],
+      dependencies: @dependencies,
       artifacts: [
         outer_brain_contracts: artifact()
       ]

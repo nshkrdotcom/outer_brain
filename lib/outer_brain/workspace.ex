@@ -19,6 +19,7 @@ defmodule OuterBrain.Workspace do
     "core/prompt_fabric",
     "core/guardrail_contracts",
     "core/guardrail_engine",
+    "core/eval_runner",
     "bridges/domain_bridge",
     "bridges/citadel_bridge",
     "bridges/publication_bridge",

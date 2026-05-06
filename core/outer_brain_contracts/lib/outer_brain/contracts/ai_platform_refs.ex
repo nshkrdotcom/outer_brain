@@ -37,6 +37,37 @@ defmodule OuterBrain.Contracts.AIPlatformRefs do
     :detector_refs,
     :redaction_posture_floor
   ]
+  @eval_suite_ref_fields [
+    :eval_suite_ref,
+    :tenant_ref,
+    :authority_ref,
+    :installation_ref,
+    :release_manifest_ref
+  ]
+  @eval_run_ref_fields [
+    :eval_run_ref,
+    :eval_suite_ref,
+    :tenant_ref,
+    :authority_ref,
+    :installation_ref,
+    :trace_ref,
+    :verdict
+  ]
+  @replay_divergence_ref_fields [
+    :replay_divergence_ref,
+    :source_trace_ref,
+    :replay_trace_ref,
+    :phase,
+    :severity,
+    :redaction_policy_ref
+  ]
+  @drift_signal_ref_fields [
+    :drift_signal_ref,
+    :tenant_ref,
+    :installation_ref,
+    :signal_class,
+    :window_ref
+  ]
   @raw_keys [
     :body,
     :raw_body,
@@ -46,6 +77,9 @@ defmodule OuterBrain.Contracts.AIPlatformRefs do
     :raw_payload,
     :guard_payload,
     :guard_violation_body,
+    :eval_payload,
+    :model_output,
+    :replay_divergence_excerpt,
     "body",
     "raw_body",
     "prompt_body",
@@ -53,7 +87,10 @@ defmodule OuterBrain.Contracts.AIPlatformRefs do
     "payload",
     "raw_payload",
     "guard_payload",
-    "guard_violation_body"
+    "guard_violation_body",
+    "eval_payload",
+    "model_output",
+    "replay_divergence_excerpt"
   ]
   @derivation_reasons [:author, :auto_promote, :rollback, :ab_split, :ab_collapse]
   @decision_classes [
@@ -65,6 +102,23 @@ defmodule OuterBrain.Contracts.AIPlatformRefs do
     :deny_detector_unavailable
   ]
   @redaction_postures [:pass, :partial, :excerpt_only, :no_export, :block]
+  @eval_verdicts [:pass, :regress, :improve, :inconclusive]
+  @replay_phases [
+    :prompt_resolve,
+    :tool_call_payload,
+    :guard_decision,
+    :memory_access,
+    :provider_response
+  ]
+  @replay_severities [:info, :warn, :regress, :block]
+  @drift_signal_classes [
+    :prompt_drift,
+    :tool_call_drift,
+    :guard_decision_drift,
+    :memory_access_drift,
+    :cost_attribution_drift,
+    :latency_drift
+  ]
 
   defmodule PromptArtifactRef do
     @moduledoc "Prompt artifact ref with no raw prompt body."
@@ -159,6 +213,86 @@ defmodule OuterBrain.Contracts.AIPlatformRefs do
           }
   end
 
+  defmodule EvalSuiteRef do
+    @moduledoc "Eval suite ref."
+    @enforce_keys [
+      :eval_suite_ref,
+      :tenant_ref,
+      :authority_ref,
+      :installation_ref,
+      :release_manifest_ref
+    ]
+    defstruct @enforce_keys
+
+    @type t :: %__MODULE__{
+            eval_suite_ref: String.t(),
+            tenant_ref: String.t(),
+            authority_ref: String.t(),
+            installation_ref: String.t(),
+            release_manifest_ref: String.t()
+          }
+  end
+
+  defmodule EvalRunRef do
+    @moduledoc "Eval run ref with bounded verdict."
+    @enforce_keys [
+      :eval_run_ref,
+      :eval_suite_ref,
+      :tenant_ref,
+      :authority_ref,
+      :installation_ref,
+      :trace_ref,
+      :verdict
+    ]
+    defstruct @enforce_keys
+
+    @type t :: %__MODULE__{
+            eval_run_ref: String.t(),
+            eval_suite_ref: String.t(),
+            tenant_ref: String.t(),
+            authority_ref: String.t(),
+            installation_ref: String.t(),
+            trace_ref: String.t(),
+            verdict: atom()
+          }
+  end
+
+  defmodule ReplayDivergenceRef do
+    @moduledoc "Replay divergence ref."
+    @enforce_keys [
+      :replay_divergence_ref,
+      :source_trace_ref,
+      :replay_trace_ref,
+      :phase,
+      :severity,
+      :redaction_policy_ref
+    ]
+    defstruct @enforce_keys
+
+    @type t :: %__MODULE__{
+            replay_divergence_ref: String.t(),
+            source_trace_ref: String.t(),
+            replay_trace_ref: String.t(),
+            phase: atom(),
+            severity: atom(),
+            redaction_policy_ref: String.t()
+          }
+  end
+
+  defmodule DriftSignalRef do
+    @moduledoc "Drift signal ref."
+    @enforce_keys [:drift_signal_ref, :tenant_ref, :installation_ref, :signal_class, :window_ref]
+    defstruct @enforce_keys
+
+    @type t :: %__MODULE__{
+            drift_signal_ref: String.t(),
+            tenant_ref: String.t(),
+            installation_ref: String.t(),
+            signal_class: atom(),
+            window_ref: String.t()
+          }
+  end
+
   @spec prompt_artifact_ref(map()) :: {:ok, PromptArtifactRef.t()} | {:error, term()}
   def prompt_artifact_ref(attrs) when is_map(attrs) do
     with :ok <- reject_raw(attrs),
@@ -232,6 +366,73 @@ defmodule OuterBrain.Contracts.AIPlatformRefs do
        }}
     else
       _other -> {:error, :invalid_guard_chain_ref}
+    end
+  end
+
+  @spec eval_suite_ref(map()) :: {:ok, EvalSuiteRef.t()} | {:error, term()}
+  def eval_suite_ref(attrs) when is_map(attrs) do
+    with :ok <- reject_raw(attrs),
+         :ok <- required(attrs, @eval_suite_ref_fields) do
+      {:ok,
+       %EvalSuiteRef{
+         eval_suite_ref: value!(attrs, :eval_suite_ref),
+         tenant_ref: value!(attrs, :tenant_ref),
+         authority_ref: value!(attrs, :authority_ref),
+         installation_ref: value!(attrs, :installation_ref),
+         release_manifest_ref: value!(attrs, :release_manifest_ref)
+       }}
+    end
+  end
+
+  @spec eval_run_ref(map()) :: {:ok, EvalRunRef.t()} | {:error, term()}
+  def eval_run_ref(attrs) when is_map(attrs) do
+    with :ok <- reject_raw(attrs),
+         :ok <- required(attrs, @eval_run_ref_fields),
+         {:ok, verdict} <- member(attrs, :verdict, @eval_verdicts) do
+      {:ok,
+       %EvalRunRef{
+         eval_run_ref: value!(attrs, :eval_run_ref),
+         eval_suite_ref: value!(attrs, :eval_suite_ref),
+         tenant_ref: value!(attrs, :tenant_ref),
+         authority_ref: value!(attrs, :authority_ref),
+         installation_ref: value!(attrs, :installation_ref),
+         trace_ref: value!(attrs, :trace_ref),
+         verdict: verdict
+       }}
+    end
+  end
+
+  @spec replay_divergence_ref(map()) :: {:ok, ReplayDivergenceRef.t()} | {:error, term()}
+  def replay_divergence_ref(attrs) when is_map(attrs) do
+    with :ok <- reject_raw(attrs),
+         :ok <- required(attrs, @replay_divergence_ref_fields),
+         {:ok, phase} <- member(attrs, :phase, @replay_phases),
+         {:ok, severity} <- member(attrs, :severity, @replay_severities) do
+      {:ok,
+       %ReplayDivergenceRef{
+         replay_divergence_ref: value!(attrs, :replay_divergence_ref),
+         source_trace_ref: value!(attrs, :source_trace_ref),
+         replay_trace_ref: value!(attrs, :replay_trace_ref),
+         phase: phase,
+         severity: severity,
+         redaction_policy_ref: value!(attrs, :redaction_policy_ref)
+       }}
+    end
+  end
+
+  @spec drift_signal_ref(map()) :: {:ok, DriftSignalRef.t()} | {:error, term()}
+  def drift_signal_ref(attrs) when is_map(attrs) do
+    with :ok <- reject_raw(attrs),
+         :ok <- required(attrs, @drift_signal_ref_fields),
+         {:ok, signal_class} <- member(attrs, :signal_class, @drift_signal_classes) do
+      {:ok,
+       %DriftSignalRef{
+         drift_signal_ref: value!(attrs, :drift_signal_ref),
+         tenant_ref: value!(attrs, :tenant_ref),
+         installation_ref: value!(attrs, :installation_ref),
+         signal_class: signal_class,
+         window_ref: value!(attrs, :window_ref)
+       }}
     end
   end
 

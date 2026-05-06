@@ -29,6 +29,30 @@ defmodule OuterBrain.Contracts.AIPlatformRefsTest do
              |> AIPlatformRefs.guard_decision_ref()
   end
 
+  test "eval replay and drift refs carry bounded classes without raw payloads" do
+    assert {:ok, suite} = AIPlatformRefs.eval_suite_ref(eval_suite_ref())
+    assert suite.eval_suite_ref == "eval-suite://a"
+
+    assert {:ok, run} = AIPlatformRefs.eval_run_ref(eval_run_ref())
+    assert run.verdict == :regress
+
+    assert {:ok, divergence} = AIPlatformRefs.replay_divergence_ref(replay_divergence_ref())
+    assert divergence.phase == :guard_decision
+
+    assert {:ok, signal} = AIPlatformRefs.drift_signal_ref(drift_signal_ref())
+    assert signal.signal_class == :latency_drift
+
+    assert {:error, {:raw_ai_platform_ref_payload_forbidden, :model_output}} =
+             eval_run_ref()
+             |> Map.put(:model_output, "raw")
+             |> AIPlatformRefs.eval_run_ref()
+
+    assert {:error, {:invalid_ai_platform_ref, :signal_class}} =
+             drift_signal_ref()
+             |> Map.put(:signal_class, :free_form)
+             |> AIPlatformRefs.drift_signal_ref()
+  end
+
   defp prompt_ref do
     %{
       prompt_id: "prompt://a",
@@ -72,6 +96,49 @@ defmodule OuterBrain.Contracts.AIPlatformRefsTest do
       policy_revision_ref: "policy-revision://a",
       detector_refs: ["detector://pii-reference"],
       redaction_posture_floor: :partial
+    }
+  end
+
+  defp eval_suite_ref do
+    %{
+      eval_suite_ref: "eval-suite://a",
+      tenant_ref: "tenant://a",
+      authority_ref: "authority://a",
+      installation_ref: "installation://a",
+      release_manifest_ref: "release://phase-c"
+    }
+  end
+
+  defp eval_run_ref do
+    %{
+      eval_run_ref: "eval-run://a",
+      eval_suite_ref: "eval-suite://a",
+      tenant_ref: "tenant://a",
+      authority_ref: "authority://a",
+      installation_ref: "installation://a",
+      trace_ref: "trace://eval",
+      verdict: :regress
+    }
+  end
+
+  defp replay_divergence_ref do
+    %{
+      replay_divergence_ref: "replay-divergence://a",
+      source_trace_ref: "trace://source",
+      replay_trace_ref: "trace://replay",
+      phase: :guard_decision,
+      severity: :regress,
+      redaction_policy_ref: "redaction://replay"
+    }
+  end
+
+  defp drift_signal_ref do
+    %{
+      drift_signal_ref: "drift-signal://a",
+      tenant_ref: "tenant://a",
+      installation_ref: "installation://a",
+      signal_class: :latency_drift,
+      window_ref: "drift-window://a"
     }
   end
 end
