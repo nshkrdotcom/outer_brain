@@ -39,7 +39,7 @@ defmodule OuterBrain.Contracts.SemanticGatewayContractTest do
     assert evidence.provider_sdk_mock_proof? == false
 
     assert evidence.semantic_context_provenance_ref == "semantic:result-phase6-m7"
-    assert evidence.semantic_failure_ref =~ "semantic_failure_journal:v1:"
+    assert String.contains?(evidence.semantic_failure_ref, "semantic_failure_journal:v1:")
     assert evidence.read_only_context_adapter_boundary_ref == "context-adapter:phase6-m7"
     assert evidence.reply_publication_dedupe_ref == "causal-phase6-m7:final"
     assert evidence.suppression_visibility_ref == "suppression:phase6-m7"

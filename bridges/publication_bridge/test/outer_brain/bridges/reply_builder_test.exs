@@ -28,11 +28,11 @@ defmodule OuterBrain.Bridges.ReplyBuilderTest do
     refute row.body == body
     assert byte_size(publication.body) <= ReplyBuilder.max_inline_body_preview_bytes()
     assert publication.body == row.body
-    assert publication.body =~ "[REDACTED]"
+    assert String.contains?(publication.body, "[REDACTED]")
     assert publication.body_ref == row.body_ref
     assert publication.body_ref["content_hash"] == publication.body_ref["body_hash"]
     assert publication.body_ref["schema_hash_alg"] == "sha256"
-    assert publication.body_ref["redaction_manifest_ref"] =~ "sha256:"
+    assert String.contains?(publication.body_ref["redaction_manifest_ref"], "sha256:")
     assert publication.body_ref["causal_unit_id"] == "causal_large"
     assert publication.body_ref["phase"] == "final"
     assert publication.body_ref["dedupe_key"] == "causal_large:final"

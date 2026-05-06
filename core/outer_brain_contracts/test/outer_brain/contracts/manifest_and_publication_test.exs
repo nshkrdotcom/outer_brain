@@ -130,6 +130,6 @@ defmodule OuterBrain.Contracts.ManifestAndPublicationTest do
     source = File.read!("lib/outer_brain/contracts/reply_body_boundary.ex")
     forbidden_call = Enum.join(["String", "to_atom"], ".")
 
-    refute source =~ forbidden_call
+    refute String.contains?(source, forbidden_call)
   end
 end

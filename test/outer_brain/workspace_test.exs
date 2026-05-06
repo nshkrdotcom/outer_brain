@@ -52,6 +52,6 @@ defmodule OuterBrain.WorkspaceTest do
   end
 
   test "child packages do not hard-code sibling repo paths" do
-    refute File.read!("bridges/domain_bridge/mix.exs") =~ "/home/home/p/g/n/"
+    refute String.contains?(File.read!("bridges/domain_bridge/mix.exs"), "/home/home/p/g/n/")
   end
 end

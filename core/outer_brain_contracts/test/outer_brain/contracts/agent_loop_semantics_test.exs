@@ -105,7 +105,7 @@ defmodule OuterBrain.Contracts.AgentLoopSemanticsTest do
 
     assert payload.candidate_fact_refs == ["candidate-fact://turn-1/1"]
     refute Map.has_key?(payload, :memory_commit_ref)
-    refute inspect(CandidateFactSet.to_payload(set)) =~ "PrivateWriter"
+    refute String.contains?(inspect(CandidateFactSet.to_payload(set)), "PrivateWriter")
 
     assert {:error, :invalid_candidate_fact_set} =
              attrs
