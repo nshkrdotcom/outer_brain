@@ -16,6 +16,7 @@ defmodule OuterBrain.Workspace do
     "core/memory_contracts",
     "core/memory_engine",
     "core/context_budget",
+    "core/token_meter",
     "core/prompt_fabric",
     "core/guardrail_contracts",
     "core/guardrail_engine",
