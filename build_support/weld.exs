@@ -28,6 +28,9 @@ defmodule OuterBrain.Build.WeldContract do
           "core/memory_contracts",
           "core/memory_engine",
           "core/context_budget",
+          "core/prompt_fabric",
+          "core/guardrail_contracts",
+          "core/guardrail_engine",
           "examples/console_chat",
           "examples/direct_citadel_action"
         ]

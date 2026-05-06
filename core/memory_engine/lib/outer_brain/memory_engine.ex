@@ -7,7 +7,7 @@ defmodule OuterBrain.MemoryEngine do
   and are not retained in returned projections.
   """
 
-  alias OuterBrain.MemoryContracts
+  alias OuterBrain.{GuardrailEngine, MemoryContracts}
 
   defmodule Store do
     @moduledoc "In-memory store state."
@@ -64,6 +64,7 @@ defmodule OuterBrain.MemoryEngine do
     max_export_bytes = Keyword.get(opts, :max_export_bytes, 512)
 
     with :ok <- select_adapter(%AdapterRegistry{}, store.adapter),
+         :ok <- guard_memory_candidate(raw_body, attrs, opts),
          {:ok, intent} <- MemoryContracts.write_intent(attrs),
          :ok <- tier_allowed(intent.scope_key),
          {:ok, evidence_hash, excerpt} <- evidence(raw_body, max_export_bytes),
@@ -174,6 +175,34 @@ defmodule OuterBrain.MemoryEngine do
   end
 
   defp evidence(raw_body, _max_export_bytes), do: {:ok, sha256(raw_body), raw_body}
+
+  defp guard_memory_candidate(raw_body, _attrs, opts) do
+    guard_attrs = Keyword.get(opts, :guard_attrs)
+    require_guard? = Keyword.get(opts, :require_guard?, false)
+
+    cond do
+      is_map(guard_attrs) ->
+        case GuardrailEngine.evaluate(:memory_candidate, raw_body, guard_attrs) do
+          {:ok, %{decision_class: decision_class, redaction_posture: posture}}
+          when decision_class in [:allow, :allow_with_redaction] and
+                 posture in [:pass, :partial, :excerpt_only] ->
+            :ok
+
+          {:ok, decision} ->
+            {:error,
+             {:memory_candidate_guard_denied, decision.decision_class, decision.redaction_posture}}
+
+          {:error, reason} ->
+            {:error, {:memory_candidate_guard_failed, reason}}
+        end
+
+      require_guard? ->
+        {:error, :memory_candidate_guard_required}
+
+      true ->
+        :ok
+    end
+  end
 
   defp sha256(value),
     do: "sha256:" <> (:crypto.hash(:sha256, value) |> Base.encode16(case: :lower))
