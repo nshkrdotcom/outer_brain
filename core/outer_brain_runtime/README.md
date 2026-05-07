@@ -9,3 +9,7 @@ Phase 7 runtime leases, fences, session owners, and stream-state helpers carry
 memory-default persistence posture. The posture is evidence only: debug tap
 failure is non-mutating, and publication or semantic-session state transitions
 do not depend on durable storage being available.
+
+## Persistence Documentation
+
+See `docs/persistence.md` for tiers, defaults, adapters, unsupported selections, config examples, restart claims, durability claims, debug sidecar behavior, redaction guarantees, migration or preflight behavior, and no-bypass scope when applicable.

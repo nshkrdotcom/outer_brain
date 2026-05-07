@@ -23,3 +23,7 @@ while keeping raw prompt and provider payload persistence disabled. Memory-mode
 callers keep using ref-only contract records; this package remains the explicit
 raw Ecto/Postgres durable opt-in and is not required for default semantic
 runtime execution.
+
+## Persistence Documentation
+
+See `docs/persistence.md` for tiers, defaults, adapters, unsupported selections, config examples, restart claims, durability claims, debug sidecar behavior, redaction guarantees, migration or preflight behavior, and no-bypass scope when applicable.

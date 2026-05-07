@@ -18,3 +18,7 @@ Phase 7 prompt and context packs carry `OuterBrain.Contracts.PersistencePosture`
 as redacted evidence. Context fragments reject raw prompt/provider payload keys,
 and memory/default or durable-redacted posture changes storage refs without
 changing prompt assembly, adapter selection, or provenance semantics.
+
+## Persistence Documentation
+
+See `docs/persistence.md` for tiers, defaults, adapters, unsupported selections, config examples, restart claims, durability claims, debug sidecar behavior, redaction guarantees, migration or preflight behavior, and no-bypass scope when applicable.

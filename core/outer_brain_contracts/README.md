@@ -64,3 +64,7 @@ Semantic activities must return workflow-visible routing facts such as
 `schema_validation_state`, `normalization_warning_count`,
 `semantic_retry_class`, `terminal_class`, and `review_reason_code`. Returning
 only a claim-check ref is rejected when workflow routing depends on those facts.
+
+## Persistence Documentation
+
+See `docs/persistence.md` for tiers, defaults, adapters, unsupported selections, config examples, restart claims, durability claims, debug sidecar behavior, redaction guarantees, migration or preflight behavior, and no-bypass scope when applicable.
