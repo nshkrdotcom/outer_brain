@@ -481,11 +481,11 @@ defmodule OuterBrain.AIArtifactContracts do
 
   defp reject_out_of_scope_owner(attrs) do
     cond do
-      jido_skill_owner?(value(attrs, :owner_scope)) ->
-        {:error, {:out_of_scope_owner, :jido_skill}}
+      out_of_scope_owner?(value(attrs, :owner_scope)) ->
+        {:error, {:out_of_scope_owner, value(attrs, :owner_scope)}}
 
-      attrs |> value(:skill_ref) |> skill_owner_scope() |> jido_skill_owner?() ->
-        {:error, {:out_of_scope_owner, :jido_skill}}
+      attrs |> value(:skill_ref) |> skill_owner_scope() |> out_of_scope_owner?() ->
+        {:error, {:out_of_scope_owner, attrs |> value(:skill_ref) |> skill_owner_scope()}}
 
       true ->
         :ok
@@ -503,15 +503,16 @@ defmodule OuterBrain.AIArtifactContracts do
       "outer_brain" ->
         {:ok, :outer_brain}
 
-      other when other in [:jido_skill, "jido_skill"] ->
-        {:error, {:out_of_scope_owner, :jido_skill}}
+      other when not is_nil(other) ->
+        {:error, {:out_of_scope_owner, other}}
 
       _other ->
         {:error, {:invalid_ai_artifact_ref, :owner_scope}}
     end
   end
 
-  defp jido_skill_owner?(owner), do: owner in [:jido_skill, "jido_skill"]
+  defp out_of_scope_owner?(owner),
+    do: not is_nil(owner) and owner not in [:outer_brain, "outer_brain"]
 
   defp required(attrs, fields) do
     case Enum.find(fields, &(not present?(value(attrs, &1)))) do

@@ -23,15 +23,15 @@ defmodule OuterBrain.AIArtifactContractsTest do
     refute Map.has_key?(projection, :model_output)
   end
 
-  test "artifact refs reject raw payload fields and jido_skill ownership" do
+  test "artifact refs reject raw payload fields and out-of-scope skill ownership" do
     assert {:error, {:raw_ai_artifact_payload_forbidden, :raw_prompt}} =
              ref_set_attrs()
              |> Map.put(:raw_prompt, "raw prompt")
              |> AIArtifactContracts.build_ref_set()
 
-    assert {:error, {:out_of_scope_owner, :jido_skill}} =
+    assert {:error, {:out_of_scope_owner, :external_skill_runtime}} =
              ref_set_attrs()
-             |> put_in([:skill_ref, :owner_scope], :jido_skill)
+             |> put_in([:skill_ref, :owner_scope], :external_skill_runtime)
              |> AIArtifactContracts.build_ref_set()
   end
 

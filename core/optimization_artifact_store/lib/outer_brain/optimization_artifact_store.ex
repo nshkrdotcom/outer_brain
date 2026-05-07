@@ -223,8 +223,10 @@ defmodule OuterBrain.OptimizationArtifactStore do
   end
 
   defp reject_out_of_scope_owner(attrs) do
-    if value(attrs, :owner_scope) in [:jido_skill, "jido_skill"] do
-      {:error, {:out_of_scope_owner, :jido_skill}}
+    owner_scope = value(attrs, :owner_scope)
+
+    if not is_nil(owner_scope) and owner_scope not in [:outer_brain, "outer_brain"] do
+      {:error, {:out_of_scope_owner, owner_scope}}
     else
       :ok
     end

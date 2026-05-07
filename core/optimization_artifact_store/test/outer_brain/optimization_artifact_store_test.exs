@@ -25,17 +25,17 @@ defmodule OuterBrain.OptimizationArtifactStoreTest do
     refute Map.has_key?(projection, :model_output)
   end
 
-  test "artifact graph rejects raw bodies and jido_skill placement" do
+  test "artifact graph rejects raw bodies and out-of-scope owner placement" do
     assert {:error, {:raw_ai_artifact_payload_forbidden, :memory_body}} =
              OptimizationArtifactStore.new()
              |> OptimizationArtifactStore.record_artifact(
                Map.put(policy_artifact_attrs(), :memory_body, "raw")
              )
 
-    assert {:error, {:out_of_scope_owner, :jido_skill}} =
+    assert {:error, {:out_of_scope_owner, :external_skill_runtime}} =
              OptimizationArtifactStore.new()
              |> OptimizationArtifactStore.record_artifact(
-               Map.put(policy_artifact_attrs(), :owner_scope, :jido_skill)
+               Map.put(policy_artifact_attrs(), :owner_scope, :external_skill_runtime)
              )
   end
 

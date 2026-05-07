@@ -65,5 +65,6 @@ promotion, and rollback decisions.
 Both packages project refs, bounded classes, lineage refs, rollback refs, trace
 refs, and redaction policy refs only. They do not store raw prompts, memory
 bodies, provider payloads, model outputs, credentials, provider SDK clients,
-execution runtime state, or product UX state. `jido_skill` is outside the
-adaptive scope; skill capabilities are represented as OuterBrain-owned refs.
+execution runtime state, or product UX state. External skill runtimes are
+outside the adaptive scope; skill capabilities are represented as
+OuterBrain-owned refs.
