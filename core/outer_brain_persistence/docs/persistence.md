@@ -75,3 +75,15 @@ Evidence stores opaque refs, stable redacted ids, hashes, bounded metadata, clai
 ## Migration And Preflight Behavior
 
 Package migrations own semantic_session_leases, semantic_journal_entries, recovery_tasks, and reply_publications.
+
+## Phase 12 Migration And Preflight Closeout
+
+- Tier: `:integration_postgres`.
+- Schema owner: `OuterBrain.Persistence.Repo`.
+- Migration owner: `core/outer_brain_persistence/priv/repo/migrations`.
+- Migration command: run `Ecto.Migrator.run(OuterBrain.Persistence.Repo, OuterBrain.Persistence.PostgresContainer.migrations_path(), :up, all: true)` against the configured repo, or the equivalent release-owned migration command for `OuterBrain.Persistence.Repo`.
+- Migration preflight command: `OuterBrain.Persistence.Store.preflight(profile: :integration_postgres, migration_proof: :present)`.
+- Failure behavior: missing migration proof returns `{:error, {:missing_migration_proof, :outer_brain_persistence}}` before semantic-session, journal, recovery, or publication mutation.
+- Rollback behavior: rollback is an operator-owned database migration action against the same repo and migration path; restart durability claims remain open until post-rollback focused tests are recorded.
+- Tagged test command: `cd core/outer_brain_persistence && mix test test/outer_brain/persistence/store_test.exs`.
+- Release claim boundary: durable OuterBrain truth is valid only after migration proof, focused package tests, root QC, static scans, and pushed commit evidence are recorded.

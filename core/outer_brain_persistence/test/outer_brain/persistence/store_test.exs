@@ -14,6 +14,22 @@ defmodule OuterBrain.Persistence.StoreTest do
   alias OuterBrain.Persistence.{PostgresContainer, Repo, Store}
   alias OuterBrain.Persistence.Schemas.RecoveryTask, as: RecoveryTaskSchema
 
+  test "memory preflight is non-mutating by default" do
+    assert :ok = Store.preflight([])
+    assert :ok = Store.preflight(profile: :mickey_mouse)
+    assert :ok = Store.preflight(profile: :memory_debug)
+  end
+
+  test "postgres preflight fails before mutation when migration proof is missing" do
+    assert {:error, {:missing_migration_proof, :outer_brain_persistence}} =
+             Store.preflight(profile: :integration_postgres)
+  end
+
+  test "postgres preflight passes when migration proof is present" do
+    assert :ok =
+             Store.preflight(profile: :integration_postgres, migration_proof: :present)
+  end
+
   setup_all do
     container = PostgresContainer.start!("outer_brain_persistence")
 

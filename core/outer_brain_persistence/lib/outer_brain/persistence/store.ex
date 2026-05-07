@@ -26,6 +26,22 @@ defmodule OuterBrain.Persistence.Store do
   @recovery_reasons [:ambiguous_submission]
   @recovery_reasons_by_schema Map.new(@recovery_reasons, &{Atom.to_string(&1), &1})
 
+  @spec preflight(keyword() | map()) :: :ok | {:error, term()}
+  def preflight(opts \\ []) do
+    attrs = Map.new(opts)
+
+    case selected_profile(attrs) do
+      profile when profile in [:mickey_mouse, :memory_debug, :off] ->
+        :ok
+
+      :integration_postgres ->
+        require_migration_proof(attrs)
+
+      other ->
+        {:error, {:unsupported_persistence_tier, :outer_brain_persistence, other}}
+    end
+  end
+
   @spec acquire_lease(Lease.t(), DateTime.t(), keyword()) ::
           {:ok, :acquired | :renewed, Lease.t()} | {:error, term()}
   def acquire_lease(%Lease{} = candidate, %DateTime{} = now, opts \\ []) do
@@ -426,6 +442,34 @@ defmodule OuterBrain.Persistence.Store do
   end
 
   defp repo(opts), do: Keyword.get(opts, :repo, Repo)
+
+  defp selected_profile(attrs) do
+    attrs
+    |> Map.get(:profile, Map.get(attrs, "profile"))
+    |> case do
+      nil ->
+        Map.get(attrs, :persistence_profile, Map.get(attrs, "persistence_profile", :mickey_mouse))
+
+      profile ->
+        profile
+    end
+    |> normalize_profile()
+  end
+
+  defp normalize_profile("mickey_mouse"), do: :mickey_mouse
+  defp normalize_profile("memory_debug"), do: :memory_debug
+  defp normalize_profile("off"), do: :off
+  defp normalize_profile("integration_postgres"), do: :integration_postgres
+  defp normalize_profile(profile), do: profile
+
+  defp require_migration_proof(attrs) do
+    case Map.get(attrs, :migration_proof) || Map.get(attrs, "migration_proof") do
+      :present -> :ok
+      true -> :ok
+      paths when is_list(paths) and paths != [] -> :ok
+      _missing -> {:error, {:missing_migration_proof, :outer_brain_persistence}}
+    end
+  end
 
   defp row_id(session_id), do: "lease:#{session_id}"
 end
