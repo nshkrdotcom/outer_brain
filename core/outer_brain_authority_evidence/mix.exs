@@ -25,7 +25,7 @@ defmodule OuterBrainAuthorityEvidence.MixProject do
 
   defp deps do
     [
-      {:outer_brain_contracts, path: "../outer_brain_contracts", runtime: false},
+      {:outer_brain_contracts, path: "../outer_brain_contracts"},
       {:outer_brain_core, path: "../outer_brain_core", runtime: false},
       {:outer_brain_prompting, path: "../outer_brain_prompting", runtime: false},
       {:outer_brain_quality, path: "../outer_brain_quality", runtime: false},

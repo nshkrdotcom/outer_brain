@@ -27,7 +27,11 @@ defmodule OuterBrain.Runtime.SessionOwnerTest do
 
     assert fence.epoch == 1
     assert fence.holder == "node_a"
+    assert fence.persistence_posture.raw_prompt_persistence? == false
     assert lease.epoch == 1
+
+    assert lease.persistence_posture.persistence_profile_ref ==
+             "persistence-profile://mickey-mouse"
   end
 
   test "stale owners can be replaced only after expiry and with a newer epoch", %{
@@ -64,11 +68,12 @@ defmodule OuterBrain.Runtime.SessionOwnerTest do
 
     stream_state =
       "session_alpha"
-      |> StreamState.provisional("publication_1")
+      |> StreamState.provisional("publication_1", persistence_profile: :durable_redacted)
       |> StreamState.finalize("publication_2")
 
     assert stream_state.phase == :final
     assert stream_state.last_publication_id == "publication_2"
+    assert stream_state.persistence_posture.durable? == true
   end
 
   defmodule FakeLeaseStore do

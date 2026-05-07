@@ -6,9 +6,18 @@ defmodule OuterBrain.Contracts.ReplyPublication do
   @phases [:provisional, :final]
   @states [:pending, :published, :suppressed]
 
-  alias OuterBrain.Contracts.ReplyBodyBoundary
+  alias OuterBrain.Contracts.{PersistencePosture, ReplyBodyBoundary}
 
-  defstruct [:publication_id, :causal_unit_id, :phase, :dedupe_key, :state, :body, :body_ref]
+  defstruct [
+    :publication_id,
+    :causal_unit_id,
+    :phase,
+    :dedupe_key,
+    :state,
+    :body,
+    :body_ref,
+    :persistence_posture
+  ]
 
   @type phase :: :provisional | :final
   @type state :: :pending | :published | :suppressed
@@ -20,7 +29,8 @@ defmodule OuterBrain.Contracts.ReplyPublication do
           dedupe_key: String.t(),
           state: state(),
           body: String.t(),
-          body_ref: ReplyBodyBoundary.body_ref()
+          body_ref: ReplyBodyBoundary.body_ref(),
+          persistence_posture: PersistencePosture.t()
         }
 
   @spec valid_phase?(term()) :: boolean()
@@ -30,15 +40,17 @@ defmodule OuterBrain.Contracts.ReplyPublication do
   def valid_state?(state), do: state in @states
 
   @spec new(map()) :: {:ok, t()} | {:error, term()}
-  def new(%{
-        publication_id: publication_id,
-        causal_unit_id: causal_unit_id,
-        phase: phase,
-        dedupe_key: dedupe_key,
-        state: state,
-        body: body,
-        body_ref: body_ref
-      })
+  def new(
+        %{
+          publication_id: publication_id,
+          causal_unit_id: causal_unit_id,
+          phase: phase,
+          dedupe_key: dedupe_key,
+          state: state,
+          body: body,
+          body_ref: body_ref
+        } = attrs
+      )
       when is_binary(publication_id) and is_binary(causal_unit_id) and phase in @phases and
              is_binary(dedupe_key) and state in @states and is_binary(body) and
              is_map(body_ref) do
@@ -52,7 +64,8 @@ defmodule OuterBrain.Contracts.ReplyPublication do
          dedupe_key: dedupe_key,
          state: state,
          body: body,
-         body_ref: body_ref
+         body_ref: body_ref,
+         persistence_posture: PersistencePosture.resolve(:publication_state, attrs)
        }}
     else
       _reason -> {:error, :invalid_reply_publication}

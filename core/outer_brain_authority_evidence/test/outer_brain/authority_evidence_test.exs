@@ -12,7 +12,23 @@ defmodule OuterBrain.AuthorityEvidenceTest do
     assert evidence.memory_fact_refs == ["memory-fact://tenant-1/fact-1"]
     assert evidence.privacy_class == :tenant_private
     assert evidence.suppression_state == :visible
+
+    assert evidence.persistence_posture.persistence_profile_ref ==
+             "persistence-profile://mickey-mouse"
+
+    assert evidence.persistence_posture.raw_prompt_persistence? == false
     assert evidence.raw_material_present? == false
+  end
+
+  test "durable authority evidence posture preserves ref-only evidence" do
+    assert {:ok, evidence} =
+             valid_evidence()
+             |> Map.put(:persistence_profile, :durable_redacted)
+             |> AuthorityEvidence.record()
+
+    assert evidence.prompt_provenance_ref == "prompt-provenance://tenant-1/turn-1"
+    assert evidence.persistence_posture.durable? == true
+    assert evidence.persistence_posture.raw_provider_payload_persistence? == false
   end
 
   test "rejects cross-tenant memory facts and raw prompt material" do

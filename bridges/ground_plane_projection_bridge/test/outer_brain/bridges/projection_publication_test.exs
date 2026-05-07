@@ -22,10 +22,13 @@ defmodule OuterBrain.Bridges.ProjectionPublicationTest do
 
     assert %{
              stream: "semantic_publications",
-             rows: [%{phase: :final, body_ref: body_ref}]
+             rows: [
+               %{phase: :final, body_ref: body_ref, persistence_posture: persistence_posture}
+             ]
            } =
              ProjectionPublication.build(publication)
 
     assert body_ref["body_hash"] == reply_body.ref["body_hash"]
+    assert persistence_posture.raw_prompt_persistence? == false
   end
 end

@@ -18,6 +18,12 @@ retry class, tenant/session/trace/causal identity, provenance, optional provider
 reference, and operator-facing message without allowing Mezzanine or AppKit to
 branch on provider-specific semantics.
 
+`OuterBrain.Contracts.PersistencePosture` is the Phase 7 ref-only storage and
+capture evidence contract. Semantic sessions, prompt/context provenance,
+failure carriers, reply publications, duplicate suppression, and authority
+evidence default to memory/ref-only posture and always mark raw prompt and raw
+provider payload persistence as false.
+
 ## Phase 4 Semantic Integrity Contracts
 
 Milestone 7 adds the release-grade contracts that keep Outer Brain a

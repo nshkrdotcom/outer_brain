@@ -17,3 +17,9 @@ Semantic failure carriers are recorded as idempotent
 encoded through `OuterBrain.Contracts.SemanticFailure`. Reply publication
 writes are idempotent by `dedupe_key`, so restart replay can update the durable
 publication row without creating a second user-visible publication.
+
+Phase 7 persistence writes preserve the posture selected by the contract layer
+while keeping raw prompt and provider payload persistence disabled. Memory-mode
+callers keep using ref-only contract records; this package remains the explicit
+raw Ecto/Postgres durable opt-in and is not required for default semantic
+runtime execution.

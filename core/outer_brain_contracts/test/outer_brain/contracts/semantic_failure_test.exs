@@ -22,6 +22,11 @@ defmodule OuterBrain.Contracts.SemanticFailureTest do
     assert failure.provenance == [%{"source" => "context_adapter"}]
     assert failure.provider_ref == %{"provider" => "semantic-host"}
 
+    assert failure.persistence_posture.persistence_profile_ref ==
+             "persistence-profile://mickey-mouse"
+
+    assert failure.persistence_posture.raw_provider_payload_persistence? == false
+
     assert %{
              "kind" => "semantic_insufficient_context",
              "retry_class" => "clarification_required",
@@ -42,6 +47,17 @@ defmodule OuterBrain.Contracts.SemanticFailureTest do
 
     assert {:ok, ^failure} =
              failure |> SemanticFailure.to_payload() |> SemanticFailure.from_payload()
+  end
+
+  test "durable semantic failure posture does not change journal identity" do
+    memory = semantic_failure!()
+    durable = semantic_failure!(persistence_profile: :durable_redacted)
+
+    assert durable.persistence_posture.durable? == true
+    assert durable.persistence_posture.raw_prompt_persistence? == false
+
+    assert SemanticFailure.journal_identity_payload(memory) ==
+             SemanticFailure.journal_identity_payload(durable)
   end
 
   test "derives structured hash journal identity from canonical semantic failure fields" do

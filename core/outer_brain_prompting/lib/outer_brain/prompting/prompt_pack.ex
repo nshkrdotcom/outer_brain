@@ -3,7 +3,7 @@ defmodule OuterBrain.Prompting.PromptPack do
   Stable prompt-pack shape used for replay and quality checkpoints.
   """
 
-  alias OuterBrain.Contracts.ToolManifestSnapshot
+  alias OuterBrain.Contracts.{PersistencePosture, ToolManifestSnapshot}
   alias OuterBrain.Prompting.{ContextPack, StrategyProfile}
 
   @spec build(map(), ToolManifestSnapshot.t(), atom()) :: {:ok, map()} | {:error, term()}
@@ -16,7 +16,8 @@ defmodule OuterBrain.Prompting.PromptPack do
          context: context_pack,
          tools: ToolManifestSnapshot.route_names(snapshot),
          manifest_id: snapshot.manifest_id,
-         schema_hash: snapshot.schema_hash
+         schema_hash: snapshot.schema_hash,
+         persistence_posture: PersistencePosture.resolve(:prompt_pack, context_pack)
        }}
     end
   end

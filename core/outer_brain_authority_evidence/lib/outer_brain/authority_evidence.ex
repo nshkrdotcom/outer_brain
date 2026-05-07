@@ -3,6 +3,8 @@ defmodule OuterBrain.AuthorityEvidence do
   Tenant-scoped, ref-only OuterBrain authority evidence.
   """
 
+  alias OuterBrain.Contracts.PersistencePosture
+
   defmodule Evidence do
     @moduledoc """
     Tenant-scoped, ref-only authority evidence record.
@@ -18,6 +20,7 @@ defmodule OuterBrain.AuthorityEvidence do
             trace_ref: String.t() | nil,
             privacy_class: :tenant_private | :redacted_summary | :operator_visible | :suppressed,
             suppression_state: :visible | :suppressed | :redacted,
+            persistence_posture: PersistencePosture.t(),
             raw_material_present?: false
           }
 
@@ -31,6 +34,7 @@ defmodule OuterBrain.AuthorityEvidence do
       :trace_ref,
       :privacy_class,
       :suppression_state,
+      :persistence_posture,
       raw_material_present?: false
     ]
   end
@@ -59,7 +63,15 @@ defmodule OuterBrain.AuthorityEvidence do
   @suppression_states [:visible, :suppressed, :redacted]
   @suppression_lookup Map.new(@suppression_states, &{Atom.to_string(&1), &1})
   @known_fields @required_refs ++
-                  @forbidden_material ++ [:trace_ref, :privacy_class, :suppression_state]
+                  @forbidden_material ++
+                  [
+                    :trace_ref,
+                    :privacy_class,
+                    :suppression_state,
+                    :persistence_posture,
+                    :persistence_profile,
+                    :persistence_profile_ref
+                  ]
 
   @spec record(map() | keyword()) ::
           {:ok, Evidence.t()}
@@ -109,7 +121,8 @@ defmodule OuterBrain.AuthorityEvidence do
       redaction_ref: Map.fetch!(attrs, :redaction_ref),
       trace_ref: Map.get(attrs, :trace_ref),
       privacy_class: privacy_class,
-      suppression_state: suppression_state
+      suppression_state: suppression_state,
+      persistence_posture: PersistencePosture.resolve(:authority_evidence, attrs)
     }
   end
 

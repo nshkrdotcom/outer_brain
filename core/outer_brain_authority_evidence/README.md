@@ -8,6 +8,10 @@ This package does not issue leases, read provider env vars, call provider SDKs,
 or materialize credentials. It records ref-only facts for AppKit, Mezzanine,
 AITrace, and StackLab.
 
+Phase 7 authority evidence carries memory-default persistence posture and
+rejects raw prompt, provider payload, token, credential, and auth material. The
+posture is runtime evidence only and does not authorize semantic effects.
+
 QC:
 
 ```bash

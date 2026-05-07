@@ -368,14 +368,17 @@ defmodule OuterBrain.Persistence.Store do
   end
 
   defp schema_to_journal_entry(schema) do
-    %SemanticJournalEntryRecord{
-      entry_id: schema.entry_id,
-      session_id: schema.session_id,
-      causal_unit_id: schema.causal_unit_id,
-      entry_type: schema.entry_type,
-      recorded_at: schema.recorded_at,
-      payload: schema.payload
-    }
+    {:ok, entry} =
+      SemanticJournalEntryRecord.new(%{
+        entry_id: schema.entry_id,
+        session_id: schema.session_id,
+        causal_unit_id: schema.causal_unit_id,
+        entry_type: schema.entry_type,
+        recorded_at: schema.recorded_at,
+        payload: schema.payload
+      })
+
+    entry
   end
 
   defp schema_to_recovery_task(schema) do
@@ -398,15 +401,18 @@ defmodule OuterBrain.Persistence.Store do
   end
 
   defp schema_to_reply_publication(schema) do
-    %ReplyPublicationRecord{
-      publication_id: schema.publication_id,
-      causal_unit_id: schema.causal_unit_id,
-      phase: schema.phase,
-      state: schema.state,
-      dedupe_key: schema.dedupe_key,
-      body: schema.body,
-      body_ref: schema.body_ref
-    }
+    {:ok, publication} =
+      ReplyPublicationRecord.new(%{
+        publication_id: schema.publication_id,
+        causal_unit_id: schema.causal_unit_id,
+        phase: schema.phase,
+        state: schema.state,
+        dedupe_key: schema.dedupe_key,
+        body: schema.body,
+        body_ref: schema.body_ref
+      })
+
+    publication
   end
 
   defp semantic_failure_from_schema!(schema) do

@@ -48,6 +48,13 @@ Adaptive layer additions:
 - `core/optimization_artifact_store`: ref-only artifact graph history for
   candidate lineage, eval evidence, promotion, and rollback decisions.
 
+Phase 7 persistence posture is carried through semantic sessions, prompt/
+context provenance, journals, duplicate suppression, publication state,
+authority evidence, and projection/publication bridges. The default profile is
+memory/ref-only; durable refs are explicit, redacted evidence, and debug
+sidecar failure cannot mutate semantic-session, prompt provenance,
+suppression, publication, projection, or failure-journal state.
+
 ## Development
 
 The project targets Elixir `~> 1.19` and Erlang/OTP `28`. The pinned toolchain

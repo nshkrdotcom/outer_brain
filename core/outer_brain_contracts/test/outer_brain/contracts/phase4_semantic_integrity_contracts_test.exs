@@ -78,6 +78,11 @@ defmodule OuterBrain.Contracts.Phase4SemanticIntegrityContractsTest do
 
     assert suppression.contract_name == "OuterBrain.SemanticDuplicateSuppression.v1"
 
+    assert suppression.persistence_posture.persistence_profile_ref ==
+             "persistence-profile://mickey-mouse"
+
+    assert suppression.persistence_posture.raw_provider_payload_persistence? == false
+
     assert {:error, {:invalid_enum, :operator_visibility}} =
              suppression
              |> SemanticDuplicateSuppression.to_map()

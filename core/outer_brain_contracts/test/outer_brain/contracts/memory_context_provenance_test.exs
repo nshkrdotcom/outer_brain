@@ -19,8 +19,25 @@ defmodule OuterBrain.Contracts.MemoryContextProvenanceTest do
              node: "reader-1"
            }
 
+    assert provenance.persistence_posture.persistence_profile_ref ==
+             "persistence-profile://mickey-mouse"
+
+    assert provenance.persistence_posture.raw_prompt_persistence? == false
+
     assert MemoryContextProvenance.to_map(provenance).recall_proof_token_ref ==
              "proof://recall/1"
+  end
+
+  test "durable provenance posture changes storage refs only" do
+    assert {:ok, provenance} =
+             valid_attrs()
+             |> Map.put(:persistence_profile, :durable_redacted)
+             |> MemoryContextProvenance.new()
+
+    assert provenance.semantic_ref == "semantic://context/1"
+    assert provenance.persistence_posture.durable? == true
+    assert provenance.persistence_posture.raw_prompt_persistence? == false
+    assert provenance.persistence_posture.raw_provider_payload_persistence? == false
   end
 
   test "v2 provenance rejects missing recall proof and invalid snapshot epoch" do

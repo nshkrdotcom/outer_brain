@@ -7,7 +7,7 @@ defmodule OuterBrain.Contracts.MemoryContextProvenance do
   why a fragment was admitted to a context pack.
   """
 
-  alias OuterBrain.Contracts.Phase4SemanticContract
+  alias OuterBrain.Contracts.{PersistencePosture, Phase4SemanticContract}
 
   @contract_name "OuterBrain.MemoryContextProvenance.v2"
 
@@ -29,7 +29,8 @@ defmodule OuterBrain.Contracts.MemoryContextProvenance do
               :snapshot_epoch,
               :source_node_ref,
               :commit_lsn,
-              :commit_hlc
+              :commit_hlc,
+              :persistence_posture
             ]
 
   @required_strings [
@@ -79,6 +80,7 @@ defmodule OuterBrain.Contracts.MemoryContextProvenance do
       |> Map.put(:provenance_refs, provenance_refs)
       |> Map.put(:snapshot_epoch, snapshot_epoch)
       |> Map.put(:commit_hlc, commit_hlc)
+      |> Map.put(:persistence_posture, PersistencePosture.resolve(:prompt_provenance, attrs))
     )
   end
 

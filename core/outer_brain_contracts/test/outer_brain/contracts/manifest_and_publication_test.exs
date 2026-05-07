@@ -87,6 +87,11 @@ defmodule OuterBrain.Contracts.ManifestAndPublicationTest do
     assert provisional.body_ref["body_hash"] == provisional_body.ref["content_hash"]
     assert final.body_ref["schema_hash_alg"] == "sha256"
 
+    assert final.persistence_posture.persistence_profile_ref ==
+             "persistence-profile://mickey-mouse"
+
+    assert final.persistence_posture.raw_prompt_persistence? == false
+
     assert {:ok, fact} =
              RuntimeFact.new(%{
                fact_id: "fact_1",
@@ -124,6 +129,27 @@ defmodule OuterBrain.Contracts.ManifestAndPublicationTest do
                body: "token=secret",
                body_ref: reply_body.ref
              })
+  end
+
+  test "reply publication durable posture preserves publication state" do
+    assert {:ok, reply_body} =
+             ReplyBodyBoundary.build("causal_1", :final, "reply:final", "Done")
+
+    assert {:ok, publication} =
+             ReplyPublication.new(%{
+               publication_id: "publication_durable",
+               causal_unit_id: "causal_1",
+               phase: :final,
+               dedupe_key: "reply:final",
+               state: :published,
+               body: reply_body.preview,
+               body_ref: reply_body.ref,
+               persistence_profile: :durable_redacted
+             })
+
+    assert publication.state == :published
+    assert publication.persistence_posture.durable? == true
+    assert publication.persistence_posture.raw_provider_payload_persistence? == false
   end
 
   test "reply body refs never create atoms from field strings" do

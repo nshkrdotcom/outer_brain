@@ -3,6 +3,7 @@ defmodule OuterBrain.Prompting.ContextPack do
   Builds a replayable context pack from semantic state and durable references.
   """
 
+  alias OuterBrain.Contracts.PersistencePosture
   alias OuterBrain.Core.SemanticFrame
   alias OuterBrain.Prompting.{ContextAdapterRegistry, ContextFragment}
 
@@ -15,7 +16,9 @@ defmodule OuterBrain.Prompting.ContextPack do
       commitments: frame.commitments,
       refs: Enum.uniq(refs),
       mode: Keyword.get(opts, :mode, :reply),
-      trace_id: Keyword.get(opts, :trace_id)
+      trace_id: Keyword.get(opts, :trace_id),
+      persistence_posture:
+        PersistencePosture.resolve(:context_pack, Keyword.get(opts, :persistence_posture, opts))
     }
 
     context_sources = Keyword.get(opts, :context_sources, [])
@@ -179,6 +182,7 @@ defmodule OuterBrain.Prompting.ContextPack do
       :commitments,
       :refs,
       :mode,
+      :persistence_posture,
       :trace_id
     ])
     |> Map.merge(%{
@@ -246,6 +250,11 @@ defmodule OuterBrain.Prompting.ContextPack do
           fetch_value(fragment, :provenance) || %{}
         ),
       staleness: fetch_value(fragment, :staleness) || %{class: "unspecified"},
+      persistence_posture:
+        PersistencePosture.resolve(
+          :context_fragment,
+          fetch_value(fragment, :persistence_posture) || %{}
+        ),
       metadata: fetch_value(fragment, :metadata) || %{}
     }
 

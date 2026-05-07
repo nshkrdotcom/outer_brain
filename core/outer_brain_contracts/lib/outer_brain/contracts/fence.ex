@@ -3,15 +3,22 @@ defmodule OuterBrain.Contracts.Fence do
   Fence view projected from a lease.
   """
 
-  alias OuterBrain.Contracts.Lease
+  alias OuterBrain.Contracts.{Lease, PersistencePosture}
 
-  defstruct [:session_id, :holder, :lease_id, :epoch]
+  defstruct [
+    :session_id,
+    :holder,
+    :lease_id,
+    :epoch,
+    persistence_posture: PersistencePosture.memory(:semantic_session)
+  ]
 
   @type t :: %__MODULE__{
           session_id: String.t(),
           holder: String.t(),
           lease_id: String.t(),
-          epoch: non_neg_integer()
+          epoch: non_neg_integer(),
+          persistence_posture: PersistencePosture.t()
         }
 
   @spec from_lease(Lease.t()) :: t()
@@ -20,7 +27,8 @@ defmodule OuterBrain.Contracts.Fence do
       session_id: lease.session_id,
       holder: lease.holder,
       lease_id: lease.lease_id,
-      epoch: lease.epoch
+      epoch: lease.epoch,
+      persistence_posture: lease.persistence_posture
     }
   end
 

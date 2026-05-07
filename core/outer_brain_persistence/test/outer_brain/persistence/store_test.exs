@@ -96,6 +96,7 @@ defmodule OuterBrain.Persistence.StoreTest do
     assert persisted_first.entry_id == first.entry_id
     assert persisted_first.entry_type == first.entry_type
     assert persisted_first.payload == first.payload
+    assert persisted_first.persistence_posture.raw_provider_payload_persistence? == false
     assert DateTime.compare(persisted_first.recorded_at, first.recorded_at) == :eq
     assert persisted_second.entry_id == second.entry_id
     assert persisted_second.entry_type == second.entry_type
@@ -128,6 +129,12 @@ defmodule OuterBrain.Persistence.StoreTest do
 
     assert [^recovery_task] = Store.pending_recovery_tasks("session_alpha", repo: repo)
     assert :final == Store.latest_publication_phase("causal_1", repo: repo)
+
+    assert [persisted_provisional, persisted_final] =
+             Store.reply_publications("causal_1", repo: repo)
+
+    assert persisted_provisional.persistence_posture.raw_prompt_persistence? == false
+    assert persisted_final.persistence_posture.raw_provider_payload_persistence? == false
   end
 
   test "pending recovery tasks reject unknown persisted reasons", %{repo: repo} do

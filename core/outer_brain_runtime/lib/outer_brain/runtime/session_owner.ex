@@ -22,7 +22,9 @@ defmodule OuterBrain.Runtime.SessionOwner do
              holder: holder,
              lease_id: lease_id,
              epoch: epoch,
-             expires_at: DateTime.add(now, ttl_seconds, :second)
+             expires_at: DateTime.add(now, ttl_seconds, :second),
+             persistence_profile: Keyword.get(opts, :persistence_profile),
+             persistence_posture: Keyword.get(opts, :persistence_posture)
            }),
          {:ok, status, persisted_lease} <- lease_store.acquire_lease(lease, now, lease_store_opts) do
       :ok = LeaseRegistry.mirror(registry, persisted_lease)

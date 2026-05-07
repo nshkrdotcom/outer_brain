@@ -3,12 +3,22 @@ defmodule OuterBrain.Journal.Tables do
   Table-shaped rows for the semantic journal.
   """
 
+  alias OuterBrain.Contracts.PersistencePosture
+
   defmodule SemanticSessionLeaseRecord do
     @moduledoc """
     Durable lease ownership row for a semantic session.
     """
 
-    defstruct [:row_id, :session_id, :holder, :lease_id, :epoch, :expires_at]
+    defstruct [
+      :row_id,
+      :session_id,
+      :holder,
+      :lease_id,
+      :epoch,
+      :expires_at,
+      :persistence_posture
+    ]
 
     @type t :: %__MODULE__{
             row_id: String.t(),
@@ -16,17 +26,20 @@ defmodule OuterBrain.Journal.Tables do
             holder: String.t(),
             lease_id: String.t(),
             epoch: non_neg_integer(),
-            expires_at: DateTime.t()
+            expires_at: DateTime.t(),
+            persistence_posture: PersistencePosture.t()
           }
 
-    def new(%{
-          row_id: row_id,
-          session_id: session_id,
-          holder: holder,
-          lease_id: lease_id,
-          epoch: epoch,
-          expires_at: %DateTime{} = expires_at
-        })
+    def new(
+          %{
+            row_id: row_id,
+            session_id: session_id,
+            holder: holder,
+            lease_id: lease_id,
+            epoch: epoch,
+            expires_at: %DateTime{} = expires_at
+          } = attrs
+        )
         when is_binary(row_id) and is_binary(session_id) and is_binary(holder) and
                is_binary(lease_id) and is_integer(epoch) and epoch >= 0 do
       {:ok,
@@ -36,7 +49,8 @@ defmodule OuterBrain.Journal.Tables do
          holder: holder,
          lease_id: lease_id,
          epoch: epoch,
-         expires_at: expires_at
+         expires_at: expires_at,
+         persistence_posture: PersistencePosture.resolve(:semantic_session, attrs)
        }}
     end
 
@@ -48,7 +62,15 @@ defmodule OuterBrain.Journal.Tables do
     Durable semantic journal row captured for restart and replay analysis.
     """
 
-    defstruct [:entry_id, :session_id, :causal_unit_id, :entry_type, :recorded_at, payload: %{}]
+    defstruct [
+      :entry_id,
+      :session_id,
+      :causal_unit_id,
+      :entry_type,
+      :recorded_at,
+      :persistence_posture,
+      payload: %{}
+    ]
 
     @type t :: %__MODULE__{
             entry_id: String.t(),
@@ -56,6 +78,7 @@ defmodule OuterBrain.Journal.Tables do
             causal_unit_id: String.t(),
             entry_type: String.t(),
             recorded_at: DateTime.t(),
+            persistence_posture: PersistencePosture.t(),
             payload: map()
           }
 
@@ -80,6 +103,7 @@ defmodule OuterBrain.Journal.Tables do
            causal_unit_id: causal_unit_id,
            entry_type: entry_type,
            recorded_at: recorded_at,
+           persistence_posture: PersistencePosture.resolve(:journal, attrs),
            payload: payload
          }}
       else
@@ -212,9 +236,18 @@ defmodule OuterBrain.Journal.Tables do
     Durable publication row describing provisional or final user-facing output.
     """
 
-    alias OuterBrain.Contracts.ReplyBodyBoundary
+    alias OuterBrain.Contracts.{PersistencePosture, ReplyBodyBoundary}
 
-    defstruct [:publication_id, :causal_unit_id, :phase, :state, :dedupe_key, :body, :body_ref]
+    defstruct [
+      :publication_id,
+      :causal_unit_id,
+      :phase,
+      :state,
+      :dedupe_key,
+      :body,
+      :body_ref,
+      persistence_posture: PersistencePosture.memory(:publication_state)
+    ]
 
     @type t :: %__MODULE__{
             publication_id: String.t(),
@@ -223,18 +256,21 @@ defmodule OuterBrain.Journal.Tables do
             state: :pending | :published | :suppressed,
             dedupe_key: String.t(),
             body: String.t(),
-            body_ref: ReplyBodyBoundary.body_ref()
+            body_ref: ReplyBodyBoundary.body_ref(),
+            persistence_posture: PersistencePosture.t()
           }
 
-    def new(%{
-          publication_id: publication_id,
-          causal_unit_id: causal_unit_id,
-          phase: phase,
-          state: state,
-          dedupe_key: dedupe_key,
-          body: body,
-          body_ref: body_ref
-        })
+    def new(
+          %{
+            publication_id: publication_id,
+            causal_unit_id: causal_unit_id,
+            phase: phase,
+            state: state,
+            dedupe_key: dedupe_key,
+            body: body,
+            body_ref: body_ref
+          } = attrs
+        )
         when is_binary(publication_id) and is_binary(causal_unit_id) and
                phase in [:provisional, :final] and
                state in [:pending, :published, :suppressed] and is_binary(dedupe_key) and
@@ -249,7 +285,8 @@ defmodule OuterBrain.Journal.Tables do
            state: state,
            dedupe_key: dedupe_key,
            body: body,
-           body_ref: body_ref
+           body_ref: body_ref,
+           persistence_posture: PersistencePosture.resolve(:publication_state, attrs)
          }}
       else
         _reason -> {:error, :invalid_reply_publication_record}

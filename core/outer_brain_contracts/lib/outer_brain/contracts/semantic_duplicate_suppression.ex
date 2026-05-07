@@ -6,7 +6,7 @@ defmodule OuterBrain.Contracts.SemanticDuplicateSuppression do
   hidden suppression is a contract violation.
   """
 
-  alias OuterBrain.Contracts.Phase4SemanticContract
+  alias OuterBrain.Contracts.{PersistencePosture, Phase4SemanticContract}
 
   @contract_name "OuterBrain.SemanticDuplicateSuppression.v1"
   @visibility ["visible"]
@@ -21,7 +21,8 @@ defmodule OuterBrain.Contracts.SemanticDuplicateSuppression do
               :routing_fact_hash,
               :publication_ref,
               :operator_visibility,
-              :reason_code
+              :reason_code,
+              :persistence_posture
             ]
 
   @required_strings [
@@ -60,6 +61,7 @@ defmodule OuterBrain.Contracts.SemanticDuplicateSuppression do
       __MODULE__,
       Map.new(@fields, &{&1, Phase4SemanticContract.fetch_value(attrs, &1)})
       |> Map.put(:contract_name, @contract_name)
+      |> Map.put(:persistence_posture, PersistencePosture.resolve(:duplicate_suppression, attrs))
     )
   end
 end

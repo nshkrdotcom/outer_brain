@@ -30,6 +30,11 @@ defmodule OuterBrain.Prompting.PromptPackTest do
     assert {:ok, pack} = PromptPack.build(context_pack, snapshot, :balanced)
     assert pack.context.refs == ["turn_1", "artifact_1"]
     assert pack.tools == ["reply_to_user"]
+
+    assert pack.persistence_posture.persistence_profile_ref ==
+             "persistence-profile://mickey-mouse"
+
+    assert pack.persistence_posture.raw_prompt_persistence? == false
     assert {:ok, %{name: :balanced}} = StrategyProfile.fetch(:balanced)
   end
 

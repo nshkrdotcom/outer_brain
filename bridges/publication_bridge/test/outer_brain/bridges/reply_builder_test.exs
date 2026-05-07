@@ -14,6 +14,19 @@ defmodule OuterBrain.Bridges.ReplyBuilderTest do
     assert final.phase == :final
     assert provisional_row.phase == :provisional
     assert final_row.phase == :final
+    assert provisional.persistence_posture.raw_prompt_persistence? == false
+    assert provisional_row.persistence_posture.raw_provider_payload_persistence? == false
+  end
+
+  test "publication bridge can carry durable redacted posture without changing body refs" do
+    assert {:ok, publication, row} =
+             ReplyBuilder.final("causal_durable", "Done", "causal_durable:final",
+               persistence_profile: :durable_redacted
+             )
+
+    assert publication.persistence_posture.durable? == true
+    assert row.persistence_posture.durable? == true
+    assert publication.body_ref == row.body_ref
   end
 
   test "large reply bodies become bounded redacted previews plus artifact refs" do

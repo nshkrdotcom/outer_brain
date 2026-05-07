@@ -16,7 +16,8 @@ defmodule OuterBrain.Bridges.ProjectionPublication do
           causal_unit_id: publication.causal_unit_id,
           phase: publication.phase,
           state: publication.state,
-          body_ref: publication.body_ref
+          body_ref: publication.body_ref,
+          persistence_posture: publication.persistence_posture
         }
       ]
     }

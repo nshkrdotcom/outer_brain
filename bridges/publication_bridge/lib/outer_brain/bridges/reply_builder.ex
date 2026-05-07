@@ -10,42 +10,49 @@ defmodule OuterBrain.Bridges.ReplyBuilder do
   @spec max_inline_body_preview_bytes() :: pos_integer()
   def max_inline_body_preview_bytes, do: ReplyBodyBoundary.max_preview_bytes()
 
-  @spec provisional(String.t(), String.t(), String.t()) ::
+  @spec provisional(String.t(), String.t(), String.t(), keyword()) ::
           {:ok, ReplyPublication.t(), struct()} | {:error, term()}
-  def provisional(causal_unit_id, body, dedupe_key) do
-    build(causal_unit_id, body, dedupe_key, :provisional)
+  def provisional(causal_unit_id, body, dedupe_key, opts \\ []) do
+    build(causal_unit_id, body, dedupe_key, :provisional, opts)
   end
 
-  @spec final(String.t(), String.t(), String.t()) ::
+  @spec final(String.t(), String.t(), String.t(), keyword()) ::
           {:ok, ReplyPublication.t(), struct()} | {:error, term()}
-  def final(causal_unit_id, body, dedupe_key) do
-    build(causal_unit_id, body, dedupe_key, :final)
+  def final(causal_unit_id, body, dedupe_key, opts \\ []) do
+    build(causal_unit_id, body, dedupe_key, :final, opts)
   end
 
-  defp build(causal_unit_id, body, dedupe_key, phase) do
+  defp build(causal_unit_id, body, dedupe_key, phase, opts) do
     publication_id = "#{causal_unit_id}:#{phase}"
+    persistence_attrs = Map.new(opts)
 
     with {:ok, reply_body} <- ReplyBodyBoundary.build(causal_unit_id, phase, dedupe_key, body),
          {:ok, publication} <-
-           ReplyPublication.new(%{
-             publication_id: publication_id,
-             causal_unit_id: causal_unit_id,
-             phase: phase,
-             dedupe_key: dedupe_key,
-             state: :published,
-             body: reply_body.preview,
-             body_ref: reply_body.ref
-           }),
+           ReplyPublication.new(
+             %{
+               publication_id: publication_id,
+               causal_unit_id: causal_unit_id,
+               phase: phase,
+               dedupe_key: dedupe_key,
+               state: :published,
+               body: reply_body.preview,
+               body_ref: reply_body.ref
+             }
+             |> Map.merge(persistence_attrs)
+           ),
          {:ok, row} <-
-           ReplyPublicationRecord.new(%{
-             publication_id: publication_id,
-             causal_unit_id: causal_unit_id,
-             phase: phase,
-             state: :published,
-             dedupe_key: dedupe_key,
-             body: reply_body.preview,
-             body_ref: reply_body.ref
-           }) do
+           ReplyPublicationRecord.new(
+             %{
+               publication_id: publication_id,
+               causal_unit_id: causal_unit_id,
+               phase: phase,
+               state: :published,
+               dedupe_key: dedupe_key,
+               body: reply_body.preview,
+               body_ref: reply_body.ref
+             }
+             |> Map.merge(persistence_attrs)
+           ) do
       {:ok, publication, row}
     end
   end

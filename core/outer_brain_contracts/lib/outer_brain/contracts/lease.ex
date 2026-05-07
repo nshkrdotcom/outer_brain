@@ -3,14 +3,24 @@ defmodule OuterBrain.Contracts.Lease do
   Lease contract for one semantic-session owner.
   """
 
-  defstruct [:session_id, :holder, :lease_id, :epoch, :expires_at]
+  alias OuterBrain.Contracts.PersistencePosture
+
+  defstruct [
+    :session_id,
+    :holder,
+    :lease_id,
+    :epoch,
+    :expires_at,
+    persistence_posture: PersistencePosture.memory(:semantic_session)
+  ]
 
   @type t :: %__MODULE__{
           session_id: String.t(),
           holder: String.t(),
           lease_id: String.t(),
           epoch: non_neg_integer(),
-          expires_at: DateTime.t()
+          expires_at: DateTime.t(),
+          persistence_posture: PersistencePosture.t()
         }
 
   @required_fields [:session_id, :holder, :lease_id, :epoch, :expires_at]
@@ -26,7 +36,8 @@ defmodule OuterBrain.Contracts.Lease do
          holder: Map.fetch!(attrs, :holder),
          lease_id: Map.fetch!(attrs, :lease_id),
          epoch: epoch,
-         expires_at: expires_at
+         expires_at: expires_at,
+         persistence_posture: PersistencePosture.resolve(:semantic_session, attrs)
        }}
     end
   end

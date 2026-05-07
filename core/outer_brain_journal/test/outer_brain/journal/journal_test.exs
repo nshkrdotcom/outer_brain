@@ -10,6 +10,7 @@ defmodule OuterBrain.JournalTest do
     ReplyPublicationRecord,
     SemanticFrameRecord,
     SemanticJournalEntryRecord,
+    SemanticSessionLeaseRecord,
     ToolManifestRecord
   }
 
@@ -155,6 +156,37 @@ defmodule OuterBrain.JournalTest do
 
     assert [%SemanticJournalEntryRecord{entry_id: "entry_1"}] =
              Journal.all(next_state, :semantic_journal_entries)
+  end
+
+  test "semantic session and journal rows default to memory posture" do
+    assert {:ok, lease} =
+             SemanticSessionLeaseRecord.new(%{
+               row_id: "lease_row_1",
+               session_id: "session_1",
+               holder: "outer_brain_runtime",
+               lease_id: "lease_1",
+               epoch: 1,
+               expires_at: DateTime.from_unix!(1_800_000_400)
+             })
+
+    assert lease.persistence_posture.persistence_profile_ref ==
+             "persistence-profile://mickey-mouse"
+
+    assert lease.persistence_posture.raw_prompt_persistence? == false
+
+    assert {:ok, entry} =
+             SemanticJournalEntryRecord.new(%{
+               entry_id: "entry_durable",
+               session_id: "session_1",
+               causal_unit_id: "causal_1",
+               entry_type: "semantic_failure",
+               recorded_at: DateTime.from_unix!(1_800_000_401),
+               payload: %{"failure_ref" => "semantic-failure://1"},
+               persistence_profile: :durable_redacted
+             })
+
+    assert entry.persistence_posture.durable? == true
+    assert entry.persistence_posture.raw_provider_payload_persistence? == false
   end
 
   defp ok!({:ok, value}), do: value

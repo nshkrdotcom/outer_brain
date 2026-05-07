@@ -24,6 +24,8 @@ defmodule OuterBrain.Contracts.SemanticFailure do
   @idempotency_alias_prefix "semantic_failure_idempotency_alias:v1:"
   @payload_hash_prefix "sha256:"
 
+  alias OuterBrain.Contracts.PersistencePosture
+
   defstruct [
     :kind,
     :retry_class,
@@ -37,6 +39,7 @@ defmodule OuterBrain.Contracts.SemanticFailure do
     :idempotency_alias,
     :provider_ref,
     :operator_message,
+    :persistence_posture,
     provenance: []
   ]
 
@@ -66,7 +69,8 @@ defmodule OuterBrain.Contracts.SemanticFailure do
           canonical_idempotency_key: String.t() | nil,
           idempotency_alias: String.t(),
           provider_ref: map() | nil,
-          operator_message: String.t()
+          operator_message: String.t(),
+          persistence_posture: PersistencePosture.t()
         }
 
   @spec kinds() :: [kind()]
@@ -127,7 +131,8 @@ defmodule OuterBrain.Contracts.SemanticFailure do
          canonical_idempotency_key: canonical_idempotency_key,
          idempotency_alias: idempotency_alias,
          provider_ref: provider_ref,
-         operator_message: operator_message
+         operator_message: operator_message,
+         persistence_posture: PersistencePosture.resolve(:semantic_failure, source)
        }}
     end
   end
@@ -171,9 +176,13 @@ defmodule OuterBrain.Contracts.SemanticFailure do
       canonical_idempotency_key: failure.canonical_idempotency_key,
       idempotency_alias: failure.idempotency_alias,
       provider_ref: failure.provider_ref,
-      operator_message: failure.operator_message
+      operator_message: failure.operator_message,
+      persistence_posture: failure.persistence_posture
     }
   end
+
+  @spec persistence_posture(t()) :: PersistencePosture.t()
+  def persistence_posture(%__MODULE__{} = failure), do: failure.persistence_posture
 
   @spec journal_entry_id(t()) :: String.t()
   def journal_entry_id(%__MODULE__{} = failure) do

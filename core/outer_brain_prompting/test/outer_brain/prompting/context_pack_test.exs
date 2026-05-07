@@ -81,6 +81,23 @@ defmodule OuterBrain.Prompting.ContextPackTest do
     end
   end
 
+  defmodule RawPayloadAdapter do
+    @behaviour OuterBrain.Prompting.ContextAdapter
+
+    @impl true
+    def fetch_fragments(_request, _runtime_binding) do
+      {:ok,
+       [
+         %{
+           fragment_id: "fragment-raw",
+           content: %{"raw_prompt" => "do-not-store"},
+           provenance: %{},
+           staleness: %{"class" => "fresh"}
+         }
+       ]}
+    end
+  end
+
   test "builds a context pack with bounded adapter fragments and provenance" do
     frame =
       "session_alpha"
@@ -116,6 +133,11 @@ defmodule OuterBrain.Prompting.ContextPackTest do
       )
 
     assert pack.trace_id == "0123456789abcdef0123456789abcdef"
+
+    assert pack.persistence_posture.persistence_profile_ref ==
+             "persistence-profile://mickey-mouse"
+
+    assert pack.persistence_posture.raw_prompt_persistence? == false
     assert [%{"fragment_id" => _}] = Enum.map(pack.fragments, &stringify_keys/1)
     assert length(pack.fragments) == 1
 
@@ -136,6 +158,7 @@ defmodule OuterBrain.Prompting.ContextPackTest do
     assert fragment.provenance["binding_key"] == "shared_memory"
     assert fragment.provenance["adapter_key"] == "mem0_context"
     assert fragment.provenance["workspace"] == "default"
+    assert fragment.persistence_posture.raw_provider_payload_persistence? == false
   end
 
   test "degrades context sources when trace propagation or adapter timing is missing" do
@@ -237,6 +260,7 @@ defmodule OuterBrain.Prompting.ContextPackTest do
              :max_fragments,
              :mode,
              :objective,
+             :persistence_posture,
              :refs,
              :schema_ref,
              :session_id,
@@ -255,6 +279,33 @@ defmodule OuterBrain.Prompting.ContextPackTest do
     assert fragment.provenance["binding_key"] == "shared_memory"
     assert fragment.provenance["adapter_key"] == "read_only_probe"
     assert fragment.provenance["external_system_ref"] == "memory://workspace/main"
+  end
+
+  test "rejects raw prompt or provider payload keys from context fragments" do
+    assert_raise ArgumentError, fn ->
+      ContextPack.build(
+        SemanticFrame.seed("session_raw", "reject raw context"),
+        ["turn_1"],
+        trace_id: "ffffffffffffffffffffffffffffffff",
+        context_sources: [
+          %{
+            source_ref: "workspace_memory",
+            binding_key: "shared_memory",
+            usage_phase: :retrieval,
+            required?: true,
+            timeout_ms: 20,
+            max_fragments: 1
+          }
+        ],
+        context_bindings: %{
+          "shared_memory" => %{
+            "adapter_key" => "raw_probe",
+            "test_pid" => self()
+          }
+        },
+        adapter_registry: %{"raw_probe" => RawPayloadAdapter}
+      )
+    end
   end
 
   test "rejects context fragments before append when context budget is exhausted" do
