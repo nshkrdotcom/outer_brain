@@ -1,7 +1,13 @@
+unless Code.ensure_loaded?(DependencySources) do
+  Code.require_file("dependency_sources.exs", __DIR__)
+end
+
 Code.require_file("workspace_contract.exs", __DIR__)
 
 defmodule OuterBrain.Build.WeldContract do
   @moduledoc false
+
+  alias OuterBrain.Build.WorkspaceContract
 
   @repo_root Path.expand("..", __DIR__)
 
@@ -14,24 +20,11 @@ defmodule OuterBrain.Build.WeldContract do
     "core/outer_brain_authority_evidence/README.md"
   ]
 
-  @mezzanine_repo_path Path.expand("../mezzanine", @repo_root)
-
-  @dependencies [
-    mezzanine_eval_engine: [
-      opts:
-        if File.dir?(@mezzanine_repo_path) do
-          [git: @mezzanine_repo_path, sparse: "core/eval_engine"]
-        else
-          [github: "nshkrdotcom/mezzanine", branch: "main", sparse: "core/eval_engine"]
-        end
-    ]
-  ]
-
   def manifest do
     [
       workspace: [
         root: "..",
-        project_globs: OuterBrain.Build.WorkspaceContract.active_project_globs()
+        project_globs: WorkspaceContract.active_project_globs()
       ],
       classify: [
         tooling: ["."],
@@ -54,7 +47,7 @@ defmodule OuterBrain.Build.WeldContract do
           "examples/direct_citadel_action"
         ]
       ],
-      dependencies: @dependencies,
+      dependencies: dependencies(),
       artifacts: [
         outer_brain_contracts: artifact()
       ]
@@ -81,6 +74,25 @@ defmodule OuterBrain.Build.WeldContract do
         hex_publish: false
       ]
     ]
+  end
+
+  defp dependencies do
+    [
+      mezzanine_eval_engine: manifest_dependency(:mezzanine_eval_engine)
+    ]
+  end
+
+  defp manifest_dependency(app) do
+    case DependencySources.deps(@repo_root, publish?: true) |> List.keyfind(app, 0) do
+      {^app, requirement} when is_binary(requirement) ->
+        [requirement: requirement]
+
+      {^app, requirement, opts} when is_binary(requirement) ->
+        [requirement: requirement, opts: opts]
+
+      {^app, opts} when is_list(opts) ->
+        [opts: opts]
+    end
   end
 end
 

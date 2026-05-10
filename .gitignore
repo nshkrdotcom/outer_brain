@@ -22,6 +22,7 @@ outer_brain-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 /dist/
+/.dependency_sources.local.exs
 **/_build/
 **/deps/
 **/doc/

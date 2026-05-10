@@ -1,5 +1,11 @@
+unless Code.ensure_loaded?(DependencySources) do
+  Code.require_file("../../build_support/dependency_sources.exs", __DIR__)
+end
+
 defmodule OuterBrain.EvalRunner.MixProject do
   use Mix.Project
+
+  @repo_root Path.expand("../..", __DIR__)
 
   def project do
     [
@@ -25,7 +31,7 @@ defmodule OuterBrain.EvalRunner.MixProject do
 
   defp deps do
     [
-      {:mezzanine_eval_engine, path: "../../../mezzanine/core/eval_engine"},
+      DependencySources.dep(:mezzanine_eval_engine, @repo_root),
       {:outer_brain_prompt_fabric, path: "../prompt_fabric"},
       {:outer_brain_guardrail_contracts, path: "../guardrail_contracts"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

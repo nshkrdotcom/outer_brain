@@ -1,10 +1,11 @@
+unless Code.ensure_loaded?(DependencySources) do
+  Code.require_file("../../build_support/dependency_sources.exs", __DIR__)
+end
+
 defmodule OuterBrain.DomainBridge.MixProject do
   use Mix.Project
 
-  @citadel_domain_surface_path Path.expand(
-                                 "../../../citadel/surfaces/citadel_domain_surface",
-                                 __DIR__
-                               )
+  @repo_root Path.expand("../..", __DIR__)
 
   def project do
     [
@@ -32,7 +33,7 @@ defmodule OuterBrain.DomainBridge.MixProject do
     [
       {:outer_brain_contracts, path: "../../core/outer_brain_contracts"},
       {:outer_brain_core, path: "../../core/outer_brain_core"},
-      {:citadel_domain_surface, path: @citadel_domain_surface_path},
+      DependencySources.dep(:citadel_domain_surface, @repo_root),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false}
