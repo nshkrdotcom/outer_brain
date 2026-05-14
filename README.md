@@ -40,6 +40,71 @@ Active workspace buildout. The repo uses a non-umbrella workspace layout with
 core packages, a dedicated raw-Ecto persistence layer, bridges, a host surface,
 and proving examples.
 
+## Stack Position And Runtime Shape
+
+OuterBrain is the semantic layer above deterministic authority and below host
+or product presentation. It should be the place where ambiguous language-facing
+work becomes structured semantic facts, while Citadel remains the policy
+kernel, Jido Integration remains the lower execution owner, and Mezzanine owns
+durable operational truth once a product workflow is admitted.
+
+The runtime loop is intentionally explicit:
+
+1. capture a raw turn or inbound event in the semantic journal
+2. acquire the semantic-session fence for the current epoch
+3. build a bounded context pack from memory, prompt fabric, and caller input
+4. validate the selected route/tool/action against a stored manifest snapshot
+5. compile a provider-neutral action request or semantic failure carrier
+6. publish provisional or final user-facing state with idempotent keys
+7. record provenance, redaction, duplicate-suppression, and quality evidence
+8. recover from durable journal/publication evidence after restart
+
+That shape keeps semantic facts replayable without requiring lower workflow
+history to contain raw prompts, raw context packs, provider-native payloads, or
+private reasoning.
+
+## Current Package Families
+
+The workspace currently contains these active families:
+
+- `outer_brain_contracts`, `outer_brain_core`, `outer_brain_journal`,
+  `outer_brain_persistence`, `outer_brain_runtime`,
+  `outer_brain_restart_authority`, and `outer_brain_quality` for the core
+  semantic runtime.
+- `outer_brain_prompting`, `prompt_fabric`, `context_budget`,
+  `memory_contracts`, `memory_engine`, `guardrail_contracts`,
+  `guardrail_engine`, `eval_runner`, and `token_meter` for prompt/context,
+  memory, guardrail, eval, and cost-sensitive semantic support.
+- `outer_brain_authority_evidence`, `ai_artifact_contracts`, and
+  `optimization_artifact_store` for ref-only evidence and adaptive artifact
+  lineage.
+- bridge packages for Citadel, typed domain routes, publication, review, and
+  GroundPlane-shaped projections.
+- `apps/host_surface` and examples for console chat and direct Citadel action
+  proof.
+
+## Current Proof And Acceptance Posture
+
+OuterBrain has durable semantic-session and restart-safety proof coverage in
+StackLab. The important current claim is not "complete agent intelligence";
+the claim is that semantic runtime state can be captured, bounded, recovered,
+and published without leaking raw prompt/provider material or pretending that
+trace/projection data is policy authority.
+
+Recent work added memory/context packages, prompt fabric and guardrails, token
+metering, eval-runner support, adaptive artifact identity, optimization
+artifact graph history, semantic persistence posture, authority evidence
+projection, and cleanup of env/regex/atom hazards.
+
+## Ownership Rules
+
+OuterBrain may normalize semantic failures such as stale context, route
+ambiguity, adapter unavailability, provider refusal, semantic loops, and budget
+exhaustion. It should not make governance decisions, mutate provider state
+directly, select connector credentials, or decide product-specific review
+workflow. Those effects cross into Citadel, Jido Integration, Mezzanine, or
+AppKit-owned surfaces.
+
 Adaptive layer additions:
 
 - `core/ai_artifact_contracts`: ref-only artifact identity for prompt, role,
