@@ -3,8 +3,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/nshkrdotcom/outer_brain/actions/workflows/ci.yml">
-    <img alt="GitHub Actions Workflow Status" src="https://github.com/nshkrdotcom/outer_brain/actions/workflows/ci.yml/badge.svg" />
+  <a href="https://github.com/nshkrdotcom/outer_brain">
+    <img alt="GitHub: outer_brain" src="https://img.shields.io/badge/GitHub-outer_brain-0b0f14?logo=github" />
   </a>
   <a href="https://github.com/nshkrdotcom/outer_brain/blob/main/LICENSE">
     <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0b0f14.svg" />
@@ -104,6 +104,31 @@ exhaustion. It should not make governance decisions, mutate provider state
 directly, select connector credentials, or decide product-specific review
 workflow. Those effects cross into Citadel, Jido Integration, Mezzanine, or
 AppKit-owned surfaces.
+
+## Runtime Diagrams
+
+```mermaid
+flowchart TD
+  Input["Raw turn or event"] --> Journal["Semantic journal"]
+  Journal --> Fence["Session fence and epoch"]
+  Fence --> Context["Bounded context pack"]
+  Context --> Manifest["Tool and route manifest snapshot"]
+  Manifest --> Action["Action request or semantic failure"]
+  Action --> Publication["Provisional or final publication"]
+  Publication --> Evidence["Provenance, redaction, quality evidence"]
+  Evidence --> Restart["Restart replay and dedupe"]
+  Restart --> Context
+```
+
+```mermaid
+flowchart LR
+  Memory["Memory contracts"] --> ContextBudget["Context budget"]
+  Prompt["Prompt fabric"] --> ContextBudget
+  Guard["Guardrail engine"] --> Action["Semantic action"]
+  Eval["Eval runner"] --> Quality["Quality evidence"]
+  Token["Token meter"] --> Quality
+  Artifact["Adaptive artifact refs"] --> Quality
+```
 
 Adaptive layer additions:
 
