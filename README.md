@@ -130,6 +130,30 @@ flowchart LR
   Artifact["Artifact<br/>refs"] --> Quality
 ```
 
+## Developer Flow Diagrams
+
+```mermaid
+flowchart TD
+  Journal["Journal<br/>entry"] --> Lease["Session<br/>lease"]
+  Lease --> Store["Persistence<br/>store"]
+  Store --> Publication["Reply<br/>record"]
+  Store --> Restart["Restart<br/>scan"]
+  Restart --> Reconcile["Reconcile<br/>state"]
+  Reconcile --> Dedupe["Dedupe<br/>key"]
+  Dedupe --> Publication
+```
+
+```mermaid
+flowchart LR
+  Recall["Memory<br/>recall"] --> Budget["Context<br/>budget"]
+  Budget --> Pack["Prompt<br/>pack"]
+  Pack --> Gate["Tool<br/>gate"]
+  Gate --> Guard["Guardrail<br/>engine"]
+  Guard --> Tokens["Token<br/>meter"]
+  Tokens --> Eval["Eval<br/>runner"]
+  Eval --> Checkpoint["Quality<br/>checkpoint"]
+```
+
 Adaptive layer additions:
 
 - `core/ai_artifact_contracts`: ref-only artifact identity for prompt, role,
