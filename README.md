@@ -109,25 +109,25 @@ AppKit-owned surfaces.
 
 ```mermaid
 flowchart TD
-  Input["Raw turn or event"] --> Journal["Semantic journal"]
-  Journal --> Fence["Session fence and epoch"]
-  Fence --> Context["Bounded context pack"]
-  Context --> Manifest["Tool and route manifest snapshot"]
-  Manifest --> Action["Action request or semantic failure"]
-  Action --> Publication["Provisional or final publication"]
-  Publication --> Evidence["Provenance, redaction, quality evidence"]
-  Evidence --> Restart["Restart replay and dedupe"]
+  Input["Raw turn<br/>or event"] --> Journal["Semantic<br/>journal"]
+  Journal --> Fence["Session<br/>fence"]
+  Fence --> Context["Bounded<br/>context"]
+  Context --> Manifest["Route<br/>manifest"]
+  Manifest --> Action["Action<br/>or failure"]
+  Action --> Publication["Reply<br/>publication"]
+  Publication --> Evidence["Quality<br/>evidence"]
+  Evidence --> Restart["Restart<br/>replay"]
   Restart --> Context
 ```
 
 ```mermaid
 flowchart LR
-  Memory["Memory contracts"] --> ContextBudget["Context budget"]
-  Prompt["Prompt fabric"] --> ContextBudget
-  Guard["Guardrail engine"] --> Action["Semantic action"]
-  Eval["Eval runner"] --> Quality["Quality evidence"]
-  Token["Token meter"] --> Quality
-  Artifact["Adaptive artifact refs"] --> Quality
+  Memory["Memory<br/>contracts"] --> ContextBudget["Context<br/>budget"]
+  Prompt["Prompt<br/>fabric"] --> ContextBudget
+  Guard["Guardrail<br/>engine"] --> Action["Semantic<br/>action"]
+  Eval["Eval<br/>runner"] --> Quality["Quality<br/>evidence"]
+  Token["Token<br/>meter"] --> Quality
+  Artifact["Artifact<br/>refs"] --> Quality
 ```
 
 Adaptive layer additions:
