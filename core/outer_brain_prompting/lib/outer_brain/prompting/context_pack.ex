@@ -225,14 +225,35 @@ defmodule OuterBrain.Prompting.ContextPack do
   defp fragment_report_status(_required?, _fragments), do: {:ok, nil}
 
   defp fetch_fragments(adapter, request, runtime_binding, timeout_ms) do
-    task = Task.async(fn -> adapter.fetch_fragments(request, runtime_binding) end)
+    case start_fragment_task(fn -> adapter.fetch_fragments(request, runtime_binding) end) do
+      {:ok, task} ->
+        case Task.yield(task, timeout_ms) || Task.shutdown(task, :brutal_kill) do
+          {:ok, {:ok, fragments}} when is_list(fragments) -> {:ok, fragments}
+          {:ok, {:error, reason}} -> {:error, reason}
+          {:ok, other} -> {:error, {:invalid_adapter_response, other}}
+          {:exit, reason} -> {:error, {:adapter_crash, reason}}
+          nil -> {:error, :timeout}
+        end
 
-    case Task.yield(task, timeout_ms) || Task.shutdown(task, :brutal_kill) do
-      {:ok, {:ok, fragments}} when is_list(fragments) -> {:ok, fragments}
-      {:ok, {:error, reason}} -> {:error, reason}
-      {:ok, other} -> {:error, {:invalid_adapter_response, other}}
-      {:exit, reason} -> {:error, {:adapter_crash, reason}}
-      nil -> {:error, :timeout}
+      {:error, reason} ->
+        {:error, {:context_task_supervisor_unavailable, reason}}
+    end
+  end
+
+  defp start_fragment_task(fun) when is_function(fun, 0) do
+    with :ok <- ensure_task_supervisor_started() do
+      {:ok, Task.Supervisor.async_nolink(OuterBrain.Prompting.TaskSupervisor, fun)}
+    end
+  catch
+    :exit, {:noproc, _} -> {:error, :noproc}
+    :exit, :noproc -> {:error, :noproc}
+    :exit, reason -> {:error, {:task_start_failed, reason}}
+  end
+
+  defp ensure_task_supervisor_started do
+    case Application.ensure_all_started(:outer_brain_prompting) do
+      {:ok, _started} -> :ok
+      {:error, reason} -> {:error, {:application_start_failed, reason}}
     end
   end
 
