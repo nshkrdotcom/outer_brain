@@ -228,3 +228,33 @@ Expected local contract: `127.0.0.1:7233`, UI `http://127.0.0.1:8233`, namespace
 ## Persistence Documentation
 
 See `docs/persistence.md` for tiers, defaults, adapters, unsupported selections, config examples, restart claims, durability claims, debug sidecar behavior, redaction guarantees, migration or preflight behavior, and no-bypass scope when applicable.
+
+## gn-ten Implementation Guides
+
+OuterBrain is the semantic runtime gateway. It turns language-facing input into
+bounded semantic facts, action requests, quality evidence, and publication
+state without owning product workflow, provider credentials, connector
+execution, or policy authority.
+
+Read these repo-specific guides before changing semantic runtime behavior:
+
+- [Generalized Stack Boundary](https://github.com/nshkrdotcom/outer_brain/blob/main/guides/generalized_stack.md)
+- [QC And Operations](https://github.com/nshkrdotcom/outer_brain/blob/main/guides/qc_and_operations.md)
+
+Operational rules:
+
+- Public interfaces are owned by the `core/outer_brain_*`, prompt/context/
+  memory/guardrail/eval/token packages, bridge packages, and host surface.
+- OuterBrain may consume Citadel authority facts and GroundPlane primitives. It
+  must not bypass Citadel for governance, Jido Integration for connectors, or
+  Mezzanine for admitted workflow truth.
+- Provider vocabulary is allowed only as semantic input data, failure
+  classification data, trace facts, receipt facts, or adapter evidence. Generic
+  semantic routing must use manifest, action, authority, and lease refs.
+- OuterBrain does not own GitHub or Linear live commands. If a product or proof
+  command exercises those providers through an OuterBrain path, prefix it with
+  `~/scripts/with_bash_secrets`.
+- Local development uses `mix deps.get`, `mix ci`, package-local tests, and the
+  Mezzanine-owned Temporal workflow only when a cross-repo proof requires it.
+- Evidence is emitted through semantic journal tests, restart-durability
+  receipts, quality/provenance refs, StackLab proofs, and AITrace events.
