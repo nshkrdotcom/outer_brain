@@ -11,9 +11,12 @@ defmodule OuterBrain.RestartAuthority.RestartScan do
       when is_binary(session_id) and is_binary(causal_unit_id) do
     store = Keyword.get(opts, :store, PersistenceStore)
     store_opts = Keyword.get(opts, :store_opts, [])
-    pending_tasks = store.pending_recovery_tasks(session_id, store_opts)
-    latest_publication = latest_publication(store, causal_unit_id, store_opts)
-    publication_phase = publication_phase(store, causal_unit_id, store_opts, latest_publication)
+    tenant_id = Keyword.fetch!(opts, :tenant_id)
+    pending_tasks = store.pending_recovery_tasks(tenant_id, session_id, store_opts)
+    latest_publication = latest_publication(store, tenant_id, causal_unit_id, store_opts)
+
+    publication_phase =
+      publication_phase(store, tenant_id, causal_unit_id, store_opts, latest_publication)
 
     analysis(session_id, causal_unit_id, pending_tasks, publication_phase, latest_publication)
   end
@@ -46,16 +49,17 @@ defmodule OuterBrain.RestartAuthority.RestartScan do
     }
   end
 
-  defp latest_publication(store, causal_unit_id, store_opts) do
-    if function_exported?(store, :latest_publication, 2) do
-      store.latest_publication(causal_unit_id, store_opts)
+  defp latest_publication(store, tenant_id, causal_unit_id, store_opts) do
+    if function_exported?(store, :latest_publication, 3) do
+      store.latest_publication(tenant_id, causal_unit_id, store_opts)
     end
   end
 
-  defp publication_phase(_store, _causal_unit_id, _store_opts, %{phase: phase}), do: phase
+  defp publication_phase(_store, _tenant_id, _causal_unit_id, _store_opts, %{phase: phase}),
+    do: phase
 
-  defp publication_phase(store, causal_unit_id, store_opts, _latest_publication) do
-    store.latest_publication_phase(causal_unit_id, store_opts)
+  defp publication_phase(store, tenant_id, causal_unit_id, store_opts, _latest_publication) do
+    store.latest_publication_phase(tenant_id, causal_unit_id, store_opts)
   end
 
   defp publication_ref(%{dedupe_key: dedupe_key, body_ref: body_ref}) do

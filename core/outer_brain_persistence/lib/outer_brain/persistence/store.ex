@@ -46,18 +46,20 @@ defmodule OuterBrain.Persistence.Store do
           {:ok, :acquired | :renewed, Lease.t()} | {:error, term()}
   def acquire_lease(%Lease{} = candidate, %DateTime{} = now, opts \\ []) do
     repo = repo(opts)
+    tenant_id = tenant_id!(opts)
 
-    case repo.transaction(fn -> do_acquire_lease(repo, candidate, now) end) do
+    case repo.transaction(fn -> do_acquire_lease(repo, tenant_id, candidate, now) end) do
       {:ok, {:ok, status, lease}} -> {:ok, status, lease}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  @spec fetch_current_lease(String.t(), keyword()) :: {:ok, Lease.t()} | :error
-  def fetch_current_lease(session_id, opts \\ []) when is_binary(session_id) do
+  @spec fetch_current_lease(String.t(), String.t(), keyword()) :: {:ok, Lease.t()} | :error
+  def fetch_current_lease(tenant_id, session_id, opts \\ [])
+      when is_binary(tenant_id) and is_binary(session_id) do
     repo = repo(opts)
 
-    case repo.get_by(SemanticSessionLease, session_id: session_id) do
+    case repo.get_by(SemanticSessionLease, tenant_id: tenant_id, session_id: session_id) do
       nil -> :error
       lease -> {:ok, schema_to_lease(lease)}
     end
@@ -67,10 +69,12 @@ defmodule OuterBrain.Persistence.Store do
           {:ok, SemanticJournalEntryRecord.t()} | {:error, Ecto.Changeset.t()}
   def append_semantic_journal_entry(%SemanticJournalEntryRecord{} = entry, opts \\ []) do
     repo = repo(opts)
+    tenant_id = tenant_id!(opts)
 
     %SemanticJournalEntry{}
     |> SemanticJournalEntry.changeset(%{
       entry_id: entry.entry_id,
+      tenant_id: tenant_id,
       session_id: entry.session_id,
       causal_unit_id: entry.causal_unit_id,
       entry_type: entry.entry_type,
@@ -84,12 +88,13 @@ defmodule OuterBrain.Persistence.Store do
     end
   end
 
-  @spec journal_entries(String.t(), keyword()) :: [SemanticJournalEntryRecord.t()]
-  def journal_entries(session_id, opts \\ []) when is_binary(session_id) do
+  @spec journal_entries(String.t(), String.t(), keyword()) :: [SemanticJournalEntryRecord.t()]
+  def journal_entries(tenant_id, session_id, opts \\ [])
+      when is_binary(tenant_id) and is_binary(session_id) do
     repo = repo(opts)
 
     SemanticJournalEntry
-    |> where([entry], entry.session_id == ^session_id)
+    |> where([entry], entry.tenant_id == ^tenant_id and entry.session_id == ^session_id)
     |> order_by([entry], asc: entry.recorded_at, asc: entry.inserted_at)
     |> repo.all()
     |> Enum.map(&schema_to_journal_entry/1)
@@ -102,10 +107,12 @@ defmodule OuterBrain.Persistence.Store do
   def record_recovery_task(%RecoveryTaskRecord{reason: reason} = task, opts)
       when reason in @recovery_reasons do
     repo = repo(opts)
+    tenant_id = tenant_id!(opts)
 
     changeset =
       RecoveryTask.changeset(%RecoveryTask{}, %{
         task_id: task.task_id,
+        tenant_id: tenant_id,
         session_id: task.session_id,
         reason: Atom.to_string(task.reason),
         status: task.status
@@ -123,12 +130,16 @@ defmodule OuterBrain.Persistence.Store do
   def record_recovery_task(%RecoveryTaskRecord{} = task, _opts),
     do: {:error, {:invalid_recovery_task_reason, task.reason}}
 
-  @spec pending_recovery_tasks(String.t(), keyword()) :: [RecoveryTaskRecord.t()]
-  def pending_recovery_tasks(session_id, opts \\ []) when is_binary(session_id) do
+  @spec pending_recovery_tasks(String.t(), String.t(), keyword()) :: [RecoveryTaskRecord.t()]
+  def pending_recovery_tasks(tenant_id, session_id, opts \\ [])
+      when is_binary(tenant_id) and is_binary(session_id) do
     repo = repo(opts)
 
     RecoveryTask
-    |> where([task], task.session_id == ^session_id and task.status == :pending)
+    |> where(
+      [task],
+      task.tenant_id == ^tenant_id and task.session_id == ^session_id and task.status == :pending
+    )
     |> order_by([task], asc: task.inserted_at)
     |> repo.all()
     |> Enum.map(&schema_to_recovery_task/1)
@@ -138,30 +149,39 @@ defmodule OuterBrain.Persistence.Store do
           {:ok, ReplyPublicationRecord.t()} | {:error, Ecto.Changeset.t() | term()}
   def record_reply_publication(%ReplyPublicationRecord{} = publication, opts \\ []) do
     repo = repo(opts)
+    tenant_id = tenant_id!(opts)
 
-    case repo.transaction(fn -> do_record_reply_publication(repo, publication) end) do
+    case repo.transaction(fn -> do_record_reply_publication(repo, tenant_id, publication) end) do
       {:ok, publication} -> {:ok, publication}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  @spec reply_publications(String.t(), keyword()) :: [ReplyPublicationRecord.t()]
-  def reply_publications(causal_unit_id, opts \\ []) when is_binary(causal_unit_id) do
+  @spec reply_publications(String.t(), String.t(), keyword()) :: [ReplyPublicationRecord.t()]
+  def reply_publications(tenant_id, causal_unit_id, opts \\ [])
+      when is_binary(tenant_id) and is_binary(causal_unit_id) do
     repo = repo(opts)
 
     ReplyPublication
-    |> where([publication], publication.causal_unit_id == ^causal_unit_id)
+    |> where(
+      [publication],
+      publication.tenant_id == ^tenant_id and publication.causal_unit_id == ^causal_unit_id
+    )
     |> order_by([publication], asc: publication.inserted_at, asc: publication.publication_id)
     |> repo.all()
     |> Enum.map(&schema_to_reply_publication/1)
   end
 
-  @spec latest_publication(String.t(), keyword()) :: ReplyPublicationRecord.t() | nil
-  def latest_publication(causal_unit_id, opts \\ []) when is_binary(causal_unit_id) do
+  @spec latest_publication(String.t(), String.t(), keyword()) :: ReplyPublicationRecord.t() | nil
+  def latest_publication(tenant_id, causal_unit_id, opts \\ [])
+      when is_binary(tenant_id) and is_binary(causal_unit_id) do
     repo = repo(opts)
 
     ReplyPublication
-    |> where([publication], publication.causal_unit_id == ^causal_unit_id)
+    |> where(
+      [publication],
+      publication.tenant_id == ^tenant_id and publication.causal_unit_id == ^causal_unit_id
+    )
     |> order_by(
       [publication],
       desc:
@@ -190,6 +210,7 @@ defmodule OuterBrain.Persistence.Store do
     changeset =
       SemanticJournalEntry.changeset(%SemanticJournalEntry{}, %{
         entry_id: SemanticFailure.journal_entry_id(failure),
+        tenant_id: failure.tenant_id,
         session_id: failure.semantic_session_id,
         causal_unit_id: failure.causal_unit_id,
         entry_type: @semantic_failure_entry_type,
@@ -207,26 +228,32 @@ defmodule OuterBrain.Persistence.Store do
     end
   end
 
-  @spec semantic_failure_entries(String.t(), keyword()) :: [SemanticFailure.t()]
-  def semantic_failure_entries(session_id, opts \\ []) when is_binary(session_id) do
+  @spec semantic_failure_entries(String.t(), String.t(), keyword()) :: [SemanticFailure.t()]
+  def semantic_failure_entries(tenant_id, session_id, opts \\ [])
+      when is_binary(tenant_id) and is_binary(session_id) do
     repo = repo(opts)
 
     SemanticJournalEntry
     |> where(
       [entry],
-      entry.session_id == ^session_id and entry.entry_type == ^@semantic_failure_entry_type
+      entry.tenant_id == ^tenant_id and entry.session_id == ^session_id and
+        entry.entry_type == ^@semantic_failure_entry_type
     )
     |> order_by([entry], asc: entry.recorded_at, asc: entry.inserted_at)
     |> repo.all()
     |> Enum.map(&semantic_failure_from_schema!/1)
   end
 
-  @spec latest_publication_phase(String.t(), keyword()) :: :final | :provisional | nil
-  def latest_publication_phase(causal_unit_id, opts \\ []) when is_binary(causal_unit_id) do
+  @spec latest_publication_phase(String.t(), String.t(), keyword()) :: :final | :provisional | nil
+  def latest_publication_phase(tenant_id, causal_unit_id, opts \\ [])
+      when is_binary(tenant_id) and is_binary(causal_unit_id) do
     repo = repo(opts)
 
     ReplyPublication
-    |> where([publication], publication.causal_unit_id == ^causal_unit_id)
+    |> where(
+      [publication],
+      publication.tenant_id == ^tenant_id and publication.causal_unit_id == ^causal_unit_id
+    )
     |> order_by(
       [publication],
       desc:
@@ -242,25 +269,31 @@ defmodule OuterBrain.Persistence.Store do
     |> repo.one()
   end
 
-  defp do_record_reply_publication(repo, publication) do
+  defp do_record_reply_publication(repo, tenant_id, publication) do
     existing =
       ReplyPublication
-      |> where([schema], schema.dedupe_key == ^publication.dedupe_key)
+      |> where(
+        [schema],
+        schema.tenant_id == ^tenant_id and schema.dedupe_key == ^publication.dedupe_key
+      )
       |> lock("FOR UPDATE")
       |> repo.one()
 
     case existing do
       nil ->
-        insert_reply_publication(repo, publication)
+        insert_reply_publication(repo, tenant_id, publication)
 
       %ReplyPublication{} = schema ->
-        update_idempotent_reply_publication(repo, schema, publication)
+        update_idempotent_reply_publication(repo, schema, tenant_id, publication)
     end
   end
 
-  defp insert_reply_publication(repo, publication) do
+  defp insert_reply_publication(repo, tenant_id, publication) do
     changeset =
-      ReplyPublication.changeset(%ReplyPublication{}, reply_publication_attrs(publication))
+      ReplyPublication.changeset(
+        %ReplyPublication{},
+        reply_publication_attrs(tenant_id, publication)
+      )
 
     case repo.insert(changeset, returning: true) do
       {:ok, schema} -> schema_to_reply_publication(schema)
@@ -268,11 +301,10 @@ defmodule OuterBrain.Persistence.Store do
     end
   end
 
-  defp update_idempotent_reply_publication(repo, schema, publication) do
+  defp update_idempotent_reply_publication(repo, schema, tenant_id, publication) do
     if ReplyBodyBoundary.equivalent_ref?(schema.body_ref, publication.body_ref) do
       attrs =
-        publication
-        |> reply_publication_attrs()
+        reply_publication_attrs(tenant_id, publication)
         |> Map.put(:publication_id, schema.publication_id)
 
       changeset = ReplyPublication.changeset(schema, attrs)
@@ -294,9 +326,10 @@ defmodule OuterBrain.Persistence.Store do
     end
   end
 
-  defp reply_publication_attrs(publication) do
+  defp reply_publication_attrs(tenant_id, publication) do
     %{
       publication_id: publication.publication_id,
+      tenant_id: tenant_id,
       causal_unit_id: publication.causal_unit_id,
       phase: publication.phase,
       state: publication.state,
@@ -306,26 +339,29 @@ defmodule OuterBrain.Persistence.Store do
     }
   end
 
-  defp do_acquire_lease(repo, candidate, now) do
+  defp do_acquire_lease(repo, tenant_id, candidate, now) do
     current =
       SemanticSessionLease
-      |> where([lease], lease.session_id == ^candidate.session_id)
+      |> where(
+        [lease],
+        lease.tenant_id == ^tenant_id and lease.session_id == ^candidate.session_id
+      )
       |> lock("FOR UPDATE")
       |> repo.one()
 
     case current do
       nil ->
-        persist_new_lease(repo, candidate, :acquired)
+        persist_new_lease(repo, tenant_id, candidate, :acquired)
 
       %SemanticSessionLease{} = persisted ->
         current_lease = schema_to_lease(persisted)
 
         cond do
           same_lease?(current_lease, candidate) ->
-            persist_existing_lease(repo, persisted, candidate, :renewed)
+            persist_existing_lease(repo, persisted, tenant_id, candidate, :renewed)
 
           Lease.expired?(current_lease, now) and candidate.epoch > current_lease.epoch ->
-            persist_existing_lease(repo, persisted, candidate, :acquired)
+            persist_existing_lease(repo, persisted, tenant_id, candidate, :acquired)
 
           Lease.expired?(current_lease, now) ->
             repo.rollback({:stale_epoch, Fence.from_lease(current_lease)})
@@ -336,10 +372,11 @@ defmodule OuterBrain.Persistence.Store do
     end
   end
 
-  defp persist_new_lease(repo, candidate, status) do
+  defp persist_new_lease(repo, tenant_id, candidate, status) do
     changeset =
       SemanticSessionLease.changeset(%SemanticSessionLease{}, %{
-        row_id: row_id(candidate.session_id),
+        row_id: row_id(tenant_id, candidate.session_id),
+        tenant_id: tenant_id,
         session_id: candidate.session_id,
         holder: candidate.holder,
         lease_id: candidate.lease_id,
@@ -353,9 +390,10 @@ defmodule OuterBrain.Persistence.Store do
     end
   end
 
-  defp persist_existing_lease(repo, persisted, candidate, status) do
+  defp persist_existing_lease(repo, persisted, tenant_id, candidate, status) do
     changeset =
       SemanticSessionLease.changeset(persisted, %{
+        tenant_id: tenant_id,
         holder: candidate.holder,
         lease_id: candidate.lease_id,
         epoch: candidate.epoch,
@@ -471,5 +509,12 @@ defmodule OuterBrain.Persistence.Store do
     end
   end
 
-  defp row_id(session_id), do: "lease:#{session_id}"
+  defp tenant_id!(opts) do
+    case Keyword.get(opts, :tenant_id) do
+      tenant_id when is_binary(tenant_id) and tenant_id != "" -> tenant_id
+      _other -> raise ArgumentError, "outer_brain persistence calls require :tenant_id"
+    end
+  end
+
+  defp row_id(tenant_id, session_id), do: "lease:#{tenant_id}:#{session_id}"
 end

@@ -14,6 +14,7 @@ defmodule OuterBrain.HostSurfaceTest do
              HostSurface.open_session(
                "session_alpha",
                "console_host",
+               tenant_id: "tenant://host/a",
                now: DateTime.from_unix!(1_800_000_700),
                epoch: 1,
                ttl_seconds: 30,

@@ -15,12 +15,14 @@ defmodule OuterBrain.Runtime.SessionOwnerTest do
 
     assert {:ok, :acquired, lease} =
              SessionOwner.acquire(registry, "session_alpha", "node_a", 1, now,
+               tenant_id: "tenant://runtime/a",
                ttl_seconds: 30,
                lease_store: __MODULE__.FakeLeaseStore
              )
 
     assert {:error, {:held_by_other, fence}} =
              SessionOwner.acquire(registry, "session_alpha", "node_b", 1, now,
+               tenant_id: "tenant://runtime/a",
                ttl_seconds: 30,
                lease_store: __MODULE__.FakeLeaseStore
              )
@@ -41,6 +43,7 @@ defmodule OuterBrain.Runtime.SessionOwnerTest do
 
     assert {:ok, :acquired, _lease} =
              SessionOwner.acquire(registry, "session_alpha", "node_a", 1, now,
+               tenant_id: "tenant://runtime/a",
                ttl_seconds: 1,
                lease_store: __MODULE__.FakeLeaseStore
              )
@@ -49,12 +52,14 @@ defmodule OuterBrain.Runtime.SessionOwnerTest do
 
     assert {:error, {:stale_epoch, _fence}} =
              SessionOwner.acquire(registry, "session_alpha", "node_b", 1, later,
+               tenant_id: "tenant://runtime/a",
                ttl_seconds: 30,
                lease_store: __MODULE__.FakeLeaseStore
              )
 
     assert {:ok, :acquired, replacement} =
              SessionOwner.acquire(registry, "session_alpha", "node_b", 2, later,
+               tenant_id: "tenant://runtime/a",
                ttl_seconds: 30,
                lease_store: __MODULE__.FakeLeaseStore
              )

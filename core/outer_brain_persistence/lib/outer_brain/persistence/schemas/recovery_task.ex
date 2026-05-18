@@ -8,6 +8,7 @@ defmodule OuterBrain.Persistence.Schemas.RecoveryTask do
   @primary_key {:task_id, :string, autogenerate: false}
 
   schema "recovery_tasks" do
+    field(:tenant_id, :string)
     field(:session_id, :string)
     field(:reason, :string)
     field(:status, Ecto.Enum, values: [:pending, :running, :done])
@@ -17,7 +18,7 @@ defmodule OuterBrain.Persistence.Schemas.RecoveryTask do
 
   def changeset(schema, attrs) do
     schema
-    |> cast(attrs, [:task_id, :session_id, :reason, :status])
-    |> validate_required([:task_id, :session_id, :reason, :status])
+    |> cast(attrs, [:task_id, :tenant_id, :session_id, :reason, :status])
+    |> validate_required([:task_id, :tenant_id, :session_id, :reason, :status])
   end
 end

@@ -8,6 +8,7 @@ defmodule OuterBrain.Persistence.Schemas.SemanticJournalEntry do
   @primary_key {:entry_id, :string, autogenerate: false}
 
   schema "semantic_journal_entries" do
+    field(:tenant_id, :string)
     field(:session_id, :string)
     field(:causal_unit_id, :string)
     field(:entry_type, :string)
@@ -19,9 +20,18 @@ defmodule OuterBrain.Persistence.Schemas.SemanticJournalEntry do
 
   def changeset(schema, attrs) do
     schema
-    |> cast(attrs, [:entry_id, :session_id, :causal_unit_id, :entry_type, :payload, :recorded_at])
+    |> cast(attrs, [
+      :entry_id,
+      :tenant_id,
+      :session_id,
+      :causal_unit_id,
+      :entry_type,
+      :payload,
+      :recorded_at
+    ])
     |> validate_required([
       :entry_id,
+      :tenant_id,
       :session_id,
       :causal_unit_id,
       :entry_type,

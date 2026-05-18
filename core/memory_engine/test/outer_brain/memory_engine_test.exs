@@ -3,6 +3,8 @@ defmodule OuterBrain.MemoryEngineTest do
 
   alias OuterBrain.MemoryEngine
 
+  @moduletag :tenant_isolation
+
   test "memory writes return refs and evidence without raw bodies" do
     store = MemoryEngine.new()
 

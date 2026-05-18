@@ -8,6 +8,7 @@ defmodule OuterBrain.Persistence.Schemas.SemanticSessionLease do
   @primary_key {:row_id, :string, autogenerate: false}
 
   schema "semantic_session_leases" do
+    field(:tenant_id, :string)
     field(:session_id, :string)
     field(:holder, :string)
     field(:lease_id, :string)
@@ -19,8 +20,16 @@ defmodule OuterBrain.Persistence.Schemas.SemanticSessionLease do
 
   def changeset(schema, attrs) do
     schema
-    |> cast(attrs, [:row_id, :session_id, :holder, :lease_id, :epoch, :expires_at])
-    |> validate_required([:row_id, :session_id, :holder, :lease_id, :epoch, :expires_at])
-    |> unique_constraint(:session_id)
+    |> cast(attrs, [:row_id, :tenant_id, :session_id, :holder, :lease_id, :epoch, :expires_at])
+    |> validate_required([
+      :row_id,
+      :tenant_id,
+      :session_id,
+      :holder,
+      :lease_id,
+      :epoch,
+      :expires_at
+    ])
+    |> unique_constraint([:tenant_id, :session_id])
   end
 end

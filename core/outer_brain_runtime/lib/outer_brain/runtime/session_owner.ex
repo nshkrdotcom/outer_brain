@@ -14,7 +14,10 @@ defmodule OuterBrain.Runtime.SessionOwner do
     ttl_seconds = Keyword.get(opts, :ttl_seconds, 30)
     lease_id = Keyword.get(opts, :lease_id, "#{holder}:#{session_id}:#{epoch}")
     lease_store = Keyword.get(opts, :lease_store, PersistenceStore)
-    lease_store_opts = Keyword.get(opts, :lease_store_opts, [])
+    tenant_id = Keyword.fetch!(opts, :tenant_id)
+
+    lease_store_opts =
+      opts |> Keyword.get(:lease_store_opts, []) |> Keyword.put_new(:tenant_id, tenant_id)
 
     with {:ok, lease} <-
            Lease.new(%{

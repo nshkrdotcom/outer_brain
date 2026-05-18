@@ -12,6 +12,7 @@ defmodule OuterBrain.Examples.ConsoleChat do
 
     session_opts =
       [
+        tenant_id: Keyword.get(opts, :tenant_id, "tenant://console-demo"),
         now: DateTime.from_unix!(1_800_000_800),
         epoch: 1,
         ttl_seconds: 30

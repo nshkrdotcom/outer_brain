@@ -7,6 +7,9 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
   alias OuterBrain.Journal.Tables.ReplyPublicationRecord
   alias OuterBrain.Persistence.{PostgresContainer, Repo, Store}
 
+  @moduletag :tenant_isolation
+  @tenant "tenant-semantic"
+
   setup_all do
     container = PostgresContainer.start!("outer_brain_semantic_failure_store")
 
@@ -54,12 +57,12 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
 
     assert persisted_replay.operator_message == same_replay.operator_message
 
-    assert [persisted] = Store.semantic_failure_entries("session-semantic-1", repo: repo)
+    assert [persisted] = Store.semantic_failure_entries(@tenant, "session-semantic-1", repo: repo)
     assert persisted.kind == :semantic_insufficient_context
     assert persisted.operator_message == same_replay.operator_message
     assert persisted.provenance == [%{"source" => "semantic-host"}]
 
-    assert [journal_entry] = Store.journal_entries("session-semantic-1", repo: repo)
+    assert [journal_entry] = Store.journal_entries(@tenant, "session-semantic-1", repo: repo)
     assert journal_entry.entry_id == SemanticFailure.journal_entry_id(failure)
     assert String.starts_with?(journal_entry.entry_id, "semantic_failure_journal:v1:")
     refute String.starts_with?(journal_entry.entry_id, "semantic_failure:")
@@ -70,13 +73,14 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
                recorded_at: ~U[2026-04-21 10:02:00Z]
              )
 
-    assert [first, second] = Store.semantic_failure_entries("session-semantic-1", repo: repo)
+    assert [first, second] =
+             Store.semantic_failure_entries(@tenant, "session-semantic-1", repo: repo)
+
     assert first.operator_message == "The semantic host needs a workspace clarification."
     assert second.operator_message == "The semantic host still needs a workspace clarification."
 
     journal_entry_ids =
-      "session-semantic-1"
-      |> Store.journal_entries(repo: repo)
+      Store.journal_entries(@tenant, "session-semantic-1", repo: repo)
       |> Enum.map(& &1.entry_id)
 
     assert journal_entry_ids == [
@@ -116,8 +120,8 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
     assert {:ok, ^left} = Store.record_semantic_failure(left, repo: repo)
     assert {:ok, ^right} = Store.record_semantic_failure(right, repo: repo)
 
-    assert [left_entry] = Store.journal_entries("session:semantic", repo: repo)
-    assert [right_entry] = Store.journal_entries("session", repo: repo)
+    assert [left_entry] = Store.journal_entries(@tenant, "session:semantic", repo: repo)
+    assert [right_entry] = Store.journal_entries(@tenant, "session", repo: repo)
 
     assert left_entry.entry_id == SemanticFailure.journal_entry_id(left)
     assert right_entry.entry_id == SemanticFailure.journal_entry_id(right)
@@ -153,24 +157,45 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
         "Done after replay"
       )
 
-    assert {:ok, persisted_first} = Store.record_reply_publication(first, repo: repo)
+    assert {:ok, persisted_first} =
+             Store.record_reply_publication(first, tenant_id: @tenant, repo: repo)
+
     assert persisted_first.publication_id == "publication-original"
 
-    assert {:ok, persisted_replay} = Store.record_reply_publication(same_replay, repo: repo)
+    assert {:ok, persisted_replay} =
+             Store.record_reply_publication(same_replay, tenant_id: @tenant, repo: repo)
+
     assert persisted_replay.publication_id == "publication-original"
     assert persisted_replay.body_ref["body_hash"] == first.body_ref["body_hash"]
 
     assert {:error, {:reply_publication_body_ref_mismatch, mismatch}} =
-             Store.record_reply_publication(mismatched_replay, repo: repo)
+             Store.record_reply_publication(mismatched_replay, tenant_id: @tenant, repo: repo)
 
     assert mismatch.dedupe_key == "causal-publication-1:final"
     assert mismatch.existing_body_hash == first.body_ref["body_hash"]
     assert mismatch.replay_body_hash == mismatched_replay.body_ref["body_hash"]
 
-    assert [publication] = Store.reply_publications("causal-publication-1", repo: repo)
+    assert [publication] = Store.reply_publications(@tenant, "causal-publication-1", repo: repo)
     assert publication.publication_id == "publication-original"
     assert publication.dedupe_key == "causal-publication-1:final"
     assert publication.body_ref["body_hash"] == first.body_ref["body_hash"]
+  end
+
+  test "semantic failure and publication readback cannot cross tenants", %{repo: repo} do
+    failure = semantic_failure!(operator_message: "Tenant-owned semantic failure.")
+
+    publication =
+      reply_publication!("publication-tenant", "causal-tenant", :final, "tenant:final", "Done")
+
+    assert {:ok, ^failure} = Store.record_semantic_failure(failure, repo: repo)
+
+    assert {:ok, ^publication} =
+             Store.record_reply_publication(publication, tenant_id: @tenant, repo: repo)
+
+    assert [_] = Store.semantic_failure_entries(@tenant, "session-semantic-1", repo: repo)
+    assert [] = Store.semantic_failure_entries("tenant-other", "session-semantic-1", repo: repo)
+    assert [_] = Store.reply_publications(@tenant, "causal-tenant", repo: repo)
+    assert [] = Store.reply_publications("tenant-other", "causal-tenant", repo: repo)
   end
 
   defp semantic_failure!(overrides) do

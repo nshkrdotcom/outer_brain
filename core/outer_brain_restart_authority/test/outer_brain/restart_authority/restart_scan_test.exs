@@ -30,6 +30,7 @@ defmodule OuterBrain.RestartAuthority.RestartScanTest do
              next_action: {:await_or_follow_up, :provisional_reply_published}
            } =
              RestartScan.reconstruct("session_1", "causal_1",
+               tenant_id: "tenant://restart/a",
                store: __MODULE__.FakeRestartStore,
                store_opts: [pending_tasks: [], publications: [provisional]]
              )
@@ -54,6 +55,7 @@ defmodule OuterBrain.RestartAuthority.RestartScanTest do
              publication_ref: %{dedupe_key: "causal_1:final"}
            } =
              RestartScan.reconstruct("session_1", "causal_1",
+               tenant_id: "tenant://restart/a",
                store: __MODULE__.FakeRestartStore,
                store_opts: [pending_tasks: [], publications: [provisional, final]]
              )
@@ -72,6 +74,7 @@ defmodule OuterBrain.RestartAuthority.RestartScanTest do
 
     analysis =
       RestartScan.reconstruct("session_1", "causal_1",
+        tenant_id: "tenant://restart/a",
         store: __MODULE__.FakeRestartStore,
         store_opts: [pending_tasks: [task], publications: []]
       )
@@ -83,9 +86,10 @@ defmodule OuterBrain.RestartAuthority.RestartScanTest do
   defmodule FakeRestartStore do
     @moduledoc false
 
-    def pending_recovery_tasks(_session_id, opts), do: Keyword.get(opts, :pending_tasks, [])
+    def pending_recovery_tasks(_tenant_id, _session_id, opts),
+      do: Keyword.get(opts, :pending_tasks, [])
 
-    def latest_publication(causal_unit_id, opts) do
+    def latest_publication(_tenant_id, causal_unit_id, opts) do
       opts
       |> Keyword.get(:publications, [])
       |> Enum.filter(&(&1.causal_unit_id == causal_unit_id))
@@ -93,8 +97,8 @@ defmodule OuterBrain.RestartAuthority.RestartScanTest do
       |> List.first()
     end
 
-    def latest_publication_phase(causal_unit_id, opts) do
-      case latest_publication(causal_unit_id, opts) do
+    def latest_publication_phase(tenant_id, causal_unit_id, opts) do
+      case latest_publication(tenant_id, causal_unit_id, opts) do
         nil -> nil
         publication -> publication.phase
       end

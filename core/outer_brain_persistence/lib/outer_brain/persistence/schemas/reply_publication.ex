@@ -8,6 +8,7 @@ defmodule OuterBrain.Persistence.Schemas.ReplyPublication do
   @primary_key {:publication_id, :string, autogenerate: false}
 
   schema "reply_publications" do
+    field(:tenant_id, :string)
     field(:causal_unit_id, :string)
     field(:phase, Ecto.Enum, values: [:provisional, :final])
     field(:state, Ecto.Enum, values: [:pending, :published, :suppressed])
@@ -22,6 +23,7 @@ defmodule OuterBrain.Persistence.Schemas.ReplyPublication do
     schema
     |> cast(attrs, [
       :publication_id,
+      :tenant_id,
       :causal_unit_id,
       :phase,
       :state,
@@ -31,6 +33,7 @@ defmodule OuterBrain.Persistence.Schemas.ReplyPublication do
     ])
     |> validate_required([
       :publication_id,
+      :tenant_id,
       :causal_unit_id,
       :phase,
       :state,
@@ -38,6 +41,6 @@ defmodule OuterBrain.Persistence.Schemas.ReplyPublication do
       :body,
       :body_ref
     ])
-    |> unique_constraint(:dedupe_key)
+    |> unique_constraint([:tenant_id, :dedupe_key])
   end
 end
