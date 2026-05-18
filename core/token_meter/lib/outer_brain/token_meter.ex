@@ -6,6 +6,8 @@ defmodule OuterBrain.TokenMeter do
   bodies and executable provider hooks so counting cannot depend on provider calls.
   """
 
+  alias Jido.Integration.V2.ProviderClassification
+
   defmodule TokenMeterRef do
     @moduledoc "Stable meter identity attached to provider effects."
     @enforce_keys [
@@ -82,18 +84,18 @@ defmodule OuterBrain.TokenMeter do
           }
   end
 
-  @provider_families [
-    :codex_cli,
-    :claude_cli,
-    :gemini_cli,
-    :amp_cli,
-    :github_http,
-    :notion_http,
-    :linear_http,
-    :graphql,
-    :realtime,
-    :inference
-  ]
+  @provider_family_aliases %{
+    "amp" => :amp_cli,
+    "claude" => :claude_cli,
+    "codex" => :codex_cli,
+    "gemini" => :gemini_cli,
+    "github" => :github_http,
+    "graphql" => :graphql,
+    "inference" => :inference,
+    "linear" => :linear_http,
+    "notion" => :notion_http,
+    "realtime" => :realtime
+  }
   @operation_classes [
     :prompt,
     :completion,
@@ -137,13 +139,17 @@ defmodule OuterBrain.TokenMeter do
   @type count_attrs :: map()
 
   @spec provider_families() :: [atom()]
-  def provider_families, do: @provider_families
+  def provider_families do
+    ProviderClassification.provider_family_tokens()
+    |> Enum.flat_map(&provider_family_alias/1)
+    |> Enum.uniq()
+  end
 
   @spec token_meter_ref(map()) :: {:ok, TokenMeterRef.t()} | {:error, term()}
   def token_meter_ref(attrs) when is_map(attrs) do
     with :ok <- reject_raw(attrs),
          :ok <- required_strings(attrs, [:meter_id, :model_ref, :tenant_ref, :installation_ref]),
-         {:ok, provider_family} <- member(attrs, :provider_family, @provider_families),
+         {:ok, provider_family} <- member(attrs, :provider_family, provider_families()),
          {:ok, revision} <- positive_integer(attrs, :revision) do
       {:ok,
        %TokenMeterRef{
@@ -158,6 +164,13 @@ defmodule OuterBrain.TokenMeter do
   end
 
   def token_meter_ref(_attrs), do: {:error, :invalid_token_meter_ref}
+
+  defp provider_family_alias(provider_id) when is_binary(provider_id) do
+    case Map.fetch(@provider_family_aliases, provider_id) do
+      {:ok, alias_value} -> [alias_value]
+      :error -> []
+    end
+  end
 
   @spec count_call(TokenMeterRef.t(), count_attrs()) :: {:ok, MeteredCall.t()} | {:error, term()}
   def count_call(%TokenMeterRef{} = ref, attrs) when is_map(attrs) do
