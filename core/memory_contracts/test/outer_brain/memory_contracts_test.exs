@@ -39,11 +39,54 @@ defmodule OuterBrain.MemoryContractsTest do
              |> MemoryContracts.scope_key()
   end
 
+  test "memory refs require known tiers and positive revisions" do
+    assert {:ok, ref} = MemoryContracts.memory_ref(valid_memory_ref())
+    assert ref.tier == :episodic
+    assert ref.revision == 1
+
+    assert {:error, {:invalid_field, :tier}} =
+             valid_memory_ref()
+             |> Map.put(:tier, :archive)
+             |> MemoryContracts.memory_ref()
+
+    assert {:error, {:invalid_field, :revision}} =
+             valid_memory_ref()
+             |> Map.put(:revision, 0)
+             |> MemoryContracts.memory_ref()
+  end
+
+  test "evidence refs require evidence owner, release manifest, and redaction refs" do
+    assert {:ok, evidence_ref} = MemoryContracts.evidence_ref(valid_evidence_ref())
+    assert evidence_ref.evidence_owner_ref == "owner://memory"
+
+    for field <- [
+          :evidence_hash,
+          :evidence_owner_ref,
+          :release_manifest_ref,
+          :redaction_policy_ref
+        ] do
+      assert {:error, {:missing_field, ^field}} =
+               valid_evidence_ref()
+               |> Map.delete(field)
+               |> MemoryContracts.evidence_ref()
+    end
+  end
+
   test "redaction levels, access reasons, and budget decisions use bounded vocabularies" do
     assert {:ok, _policy} = MemoryContracts.redaction_policy(:hash_only)
+
+    assert {:ok, policy} =
+             MemoryContracts.redaction_policy(%{
+               level: :no_export,
+               redaction_policy_ref: "policy://no-export"
+             })
+
+    assert policy.level == :no_export
     assert {:error, :invalid_memory_redaction_policy} = MemoryContracts.redaction_policy(:mask)
 
     assert {:ok, _reason} = MemoryContracts.access_reason(:hive_handoff)
+    assert {:ok, mapped_reason} = MemoryContracts.access_reason(%{reason: :audit_recovery})
+    assert mapped_reason.reason == :audit_recovery
     assert {:error, :unknown_memory_access_reason} = MemoryContracts.access_reason(:free_form)
 
     assert {:ok, _decision} =
@@ -64,6 +107,18 @@ defmodule OuterBrain.MemoryContractsTest do
                granted_units: 0,
                residual_units: 0
              })
+  end
+
+  test "context budget refs require identity and trace refs" do
+    assert {:ok, budget_ref} = MemoryContracts.budget_ref(valid_budget_ref())
+    assert budget_ref.trace_ref == "trace://a"
+
+    for field <- [:budget_ref, :tenant_ref, :authority_ref, :installation_ref, :trace_ref] do
+      assert {:error, {:missing_field, ^field}} =
+               valid_budget_ref()
+               |> Map.delete(field)
+               |> MemoryContracts.budget_ref()
+    end
   end
 
   test "query intents reject raw query bodies and missing max results" do
