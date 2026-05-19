@@ -6,13 +6,14 @@ defmodule OuterBrain.AIArtifactContractsTest do
   test "AOC-011 artifact ref set is ref-only and covers adaptive artifact families" do
     assert {:ok, ref_set} = AIArtifactContracts.build_ref_set(ref_set_attrs())
 
-    assert ref_set.prompt_artifact_ref.prompt_artifact_ref == "prompt://artifact/a"
-    assert ref_set.role_pack_ref.role_pack_ref == "role-pack://coordinator/a"
-    assert ref_set.skill_ref.owner_scope == :outer_brain
-    assert ref_set.candidate_ref.parent_candidate_refs == ["candidate://parent"]
-    assert ref_set.router_artifact_ref.router_artifact_ref == "router-artifact://a"
-    assert ref_set.verifier_artifact_ref.verifier_artifact_ref == "verifier://a"
-    assert ref_set.promotion_ref.rollback_ref == "rollback://a"
+    assert ref_set.prompt_refs.prompt_artifact_ref.prompt_artifact_ref == "prompt://artifact/a"
+    assert ref_set.prompt_refs.role_pack_ref.role_pack_ref == "role-pack://coordinator/a"
+    assert ref_set.prompt_refs.skill_ref.owner_scope == :outer_brain
+    assert ref_set.optimization_refs.candidate_ref.parent_candidate_refs == ["candidate://parent"]
+    assert ref_set.routing_refs.router_artifact_ref.router_artifact_ref == "router-artifact://a"
+    assert ref_set.routing_refs.verifier_artifact_ref.verifier_artifact_ref == "verifier://a"
+    assert ref_set.optimization_refs.promotion_ref.rollback_ref == "rollback://a"
+    assert ref_set.model_refs.model_profile_ref.model_profile_ref == "model-profile://a"
 
     projection = AIArtifactContracts.to_projection(ref_set)
 
@@ -24,14 +25,31 @@ defmodule OuterBrain.AIArtifactContractsTest do
   end
 
   test "artifact refs reject raw payload fields and out-of-scope skill ownership" do
-    assert {:error, {:raw_ai_artifact_payload_forbidden, :raw_prompt}} =
+    assert {:error, {:raw_ai_artifact_payload_forbidden, [:raw_prompt]}} =
              ref_set_attrs()
              |> Map.put(:raw_prompt, "raw prompt")
+             |> AIArtifactContracts.build_ref_set()
+
+    assert {:error, {:raw_ai_artifact_payload_forbidden, [:candidate_ref, :raw_provider_payload]}} =
+             ref_set_attrs()
+             |> put_in([:candidate_ref, :raw_provider_payload], "raw")
              |> AIArtifactContracts.build_ref_set()
 
     assert {:error, {:out_of_scope_owner, :external_skill_runtime}} =
              ref_set_attrs()
              |> put_in([:skill_ref, :owner_scope], :external_skill_runtime)
+             |> AIArtifactContracts.build_ref_set()
+  end
+
+  test "artifact refs reject missing fields and invalid nested states" do
+    assert {:error, {:missing_ai_artifact_ref, :model_profile_ref}} =
+             ref_set_attrs()
+             |> Map.delete(:model_profile_ref)
+             |> AIArtifactContracts.build_ref_set()
+
+    assert {:error, {:invalid_ai_artifact_ref, :candidate_ref}} =
+             ref_set_attrs()
+             |> put_in([:candidate_ref, :parent_candidate_refs], "candidate://not-a-list")
              |> AIArtifactContracts.build_ref_set()
   end
 
@@ -43,7 +61,7 @@ defmodule OuterBrain.AIArtifactContractsTest do
     assert artifact.rollback_ref == "rollback://tool-policy/a"
     assert artifact.source_ref == "prompt://artifact/a"
 
-    assert {:error, {:raw_ai_artifact_payload_forbidden, :raw_provider_payload}} =
+    assert {:error, {:raw_ai_artifact_payload_forbidden, [:raw_provider_payload]}} =
              policy_artifact_attrs()
              |> Map.put(:raw_provider_payload, "raw")
              |> AIArtifactContracts.policy_artifact_ref()
