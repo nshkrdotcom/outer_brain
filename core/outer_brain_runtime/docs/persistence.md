@@ -25,6 +25,23 @@ Supported capture levels are `:off`, `:metadata`, `:refs_only`, `:redacted_debug
 
 Memory/ref-only semantic evidence by default.
 
+## Lease Registry Lifecycle
+
+`OuterBrain.Runtime.LeaseRegistry` is a supervised runtime mirror for active
+semantic-session ownership. It is not the canonical lease store; canonical
+lease truth remains in `outer_brain_persistence`.
+
+Mirror reads that can affect ownership must use
+`current_fence_with_posture/3`. The return posture is `:mirror_fresh`,
+`:mirror_stale`, or `:missing`; stale mirror reads fail closed. A caller that
+needs to continue after a stale or missing mirror must reload from canonical
+storage with `reload_from_canonical/5` and then re-read the mirror.
+
+The registry exposes explicit `expire/3` and `release/3` operations so
+ownership removal is visible and emits telemetry. Lifecycle telemetry events
+are emitted under `[:outer_brain, :runtime, :lease_registry, event]` for
+`:acquire`, `:renew`, `:expire`, and `:release`.
+
 ## Unsupported Adapters
 
 Unsupported adapter selections fail before mutation. Silent fallback from durable selection to memory is invalid. Product code must not import lower store modules directly to compensate for a missing adapter.

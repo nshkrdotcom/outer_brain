@@ -17,7 +17,7 @@ defmodule OuterBrain.Runtime.MixProject do
   end
 
   def application do
-    [extra_applications: [:logger]]
+    [extra_applications: [:logger, :telemetry]]
   end
 
   def cli do
@@ -32,6 +32,7 @@ defmodule OuterBrain.Runtime.MixProject do
       {:outer_brain_core, path: "../outer_brain_core"},
       {:outer_brain_prompting, path: "../outer_brain_prompting"},
       {:outer_brain_quality, path: "../outer_brain_quality"},
+      {:telemetry, "~> 1.4"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false}
