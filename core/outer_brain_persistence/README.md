@@ -31,6 +31,10 @@ explicitly in tests with the Docker/container config. The dependency
 application remains inert by default so runtime configuration is not hidden in
 global app env.
 
+Dockerized Postgres test support uses a bounded readiness awaiter. Startup
+failures include the last failed probe output and remove the temporary
+container before raising.
+
 ## Persistence Documentation
 
 See `docs/persistence.md` for tiers, defaults, adapters, unsupported selections, config examples, restart claims, durability claims, debug sidecar behavior, redaction guarantees, migration or preflight behavior, and no-bypass scope when applicable.

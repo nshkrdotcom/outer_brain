@@ -436,14 +436,7 @@ defmodule OuterBrain.Prompting.ContextPackTest do
     refute_received {:ambient_context_adapter, _request, _runtime_binding}
   end
 
-  test "keeps standalone application env adapter registry behind explicit opt in" do
-    previous_registry = Application.get_env(:outer_brain_prompting, :context_adapters)
-    Application.put_env(:outer_brain_prompting, :context_adapters, %{"ambient" => AmbientAdapter})
-
-    on_exit(fn ->
-      restore_app_env(:outer_brain_prompting, :context_adapters, previous_registry)
-    end)
-
+  test "standalone callers pass adapter registry explicitly" do
     frame = SemanticFrame.seed("session_eta", "answer with standalone memory")
 
     pack =
@@ -469,7 +462,7 @@ defmodule OuterBrain.Prompting.ContextPackTest do
             "test_pid" => self()
           }
         },
-        standalone_application_env?: true
+        adapter_registry: %{"ambient" => AmbientAdapter}
       )
 
     assert_receive {:ambient_context_adapter, _request, _runtime_binding}

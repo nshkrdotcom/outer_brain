@@ -25,6 +25,25 @@ Supported capture levels are `:off`, `:metadata`, `:refs_only`, `:redacted_debug
 
 Memory/ref-only semantic evidence by default.
 
+## Cache Ownership
+
+Recall cache and sidecar index tables are classified as caller-owned private
+ETS helpers. They are not production-long-lived owners and they are not
+authoritative storage.
+
+The cache posture is:
+
+- classification: `:caller_owned_private_ets`
+- authoritative: `false`
+- retention: `:owner_process_lifetime`
+- production long-lived: `false`
+
+The caches store fragment identifiers and hashes only. They can be rebuilt from
+source fragment references after owner process loss, table deletion, or durable
+invalidation replay. Any future long-lived production cache must be introduced
+as a supervised owner with bounded retention, explicit rebuild source, and
+tests that prove stale cache reads fail closed.
+
 ## Unsupported Adapters
 
 Unsupported adapter selections fail before mutation. Silent fallback from durable selection to memory is invalid. Product code must not import lower store modules directly to compensate for a missing adapter.
@@ -32,6 +51,12 @@ Unsupported adapter selections fail before mutation. Silent fallback from durabl
 ## Configuration Precedence
 
 Configuration is explicit caller data first, package option second, release profile third, and built-in default last. Governed flows do not read process environment, local credential files, provider defaults, singleton clients, or application configuration as authority unless this package names a standalone boot boundary.
+
+## Adapter Registry Boundary
+
+Context adapter resolution is explicit caller data. Governed and standalone
+callers both pass `:adapter_registry`; ambient application configuration is not
+consulted for adapter selection.
 
 ## Example Config
 

@@ -3,6 +3,22 @@ defmodule OuterBrain.Memory.RecallCacheTest do
 
   alias OuterBrain.Memory.{RecallCache, SidecarIndex}
 
+  test "recall cache and sidecar index declare caller-owned non-authoritative posture" do
+    assert %{
+             classification: :caller_owned_private_ets,
+             authoritative?: false,
+             retention: :owner_process_lifetime,
+             production_long_lived?: false
+           } = RecallCache.posture()
+
+    assert %{
+             classification: :caller_owned_private_ets,
+             authoritative?: false,
+             retention: :owner_process_lifetime,
+             production_long_lived?: false
+           } = SidecarIndex.posture()
+  end
+
   test "recall cache stores fragment ids and hashes only and evicts by cluster or durable invalidation" do
     cache = RecallCache.new()
 
@@ -39,6 +55,21 @@ defmodule OuterBrain.Memory.RecallCacheTest do
     assert :miss = RecallCache.fetch(cache, current_key)
   end
 
+  test "recall cache can be rebuilt from source fragment references" do
+    key = cache_key(snapshot_epoch: 50)
+    source_refs = [fragment_ref("fragment-rebuild")]
+    cache = RecallCache.new()
+
+    assert :ok = RecallCache.put(cache, key, source_refs)
+    assert {:ok, source_refs} == RecallCache.fetch(cache, key)
+
+    :ets.delete(cache)
+    rebuilt_cache = RecallCache.new()
+
+    assert :ok = RecallCache.put(rebuilt_cache, key, source_refs)
+    assert {:ok, source_refs} == RecallCache.fetch(rebuilt_cache, key)
+  end
+
   test "sidecar index evicts entries that reference invalidated fragments" do
     index = SidecarIndex.new()
 
@@ -65,6 +96,21 @@ defmodule OuterBrain.Memory.RecallCacheTest do
              ])
 
     assert :miss = SidecarIndex.fetch(index, current_key)
+  end
+
+  test "sidecar index can be rebuilt from source fragment references" do
+    key = sidecar_key(snapshot_epoch: 50)
+    source_refs = [fragment_ref("fragment-rebuild")]
+    index = SidecarIndex.new()
+
+    assert :ok = SidecarIndex.put(index, key, source_refs)
+    assert {:ok, source_refs} == SidecarIndex.fetch(index, key)
+
+    :ets.delete(index)
+    rebuilt_index = SidecarIndex.new()
+
+    assert :ok = SidecarIndex.put(rebuilt_index, key, source_refs)
+    assert {:ok, source_refs} == SidecarIndex.fetch(rebuilt_index, key)
   end
 
   defp cache_key(overrides) do

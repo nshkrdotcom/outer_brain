@@ -6,9 +6,11 @@ defmodule OuterBrain.Persistence.PostgresContainer do
   @password "postgres"
   @username "postgres"
 
-  def start!(label) when is_binary(label) do
+  def start!(label, opts \\ []) when is_binary(label) and is_list(opts) do
+    command_runner = Keyword.get(opts, :command_runner, &System.cmd/3)
+
     {output, 0} =
-      System.cmd(
+      command_runner.(
         "docker",
         [
           "run",
@@ -30,15 +32,22 @@ defmodule OuterBrain.Persistence.PostgresContainer do
       )
 
     container_id = String.trim(output)
-    port = host_port!(container_id)
+    port = host_port!(container_id, command_runner)
 
-    wait_until_ready!(port)
+    try do
+      wait_until_ready!(port, command_runner, opts)
+    rescue
+      exception ->
+        stop!(%{container_id: container_id}, command_runner: command_runner)
+        reraise exception, __STACKTRACE__
+    end
 
     %{container_id: container_id, port: port}
   end
 
-  def stop!(%{container_id: container_id}) do
-    _ = System.cmd("docker", ["rm", "--force", container_id], stderr_to_stdout: true)
+  def stop!(%{container_id: container_id}, opts \\ []) do
+    command_runner = Keyword.get(opts, :command_runner, &System.cmd/3)
+    _ = command_runner.("docker", ["rm", "--force", container_id], stderr_to_stdout: true)
     :ok
   end
 
@@ -71,9 +80,9 @@ defmodule OuterBrain.Persistence.PostgresContainer do
     end
   end
 
-  defp host_port!(container_id) do
+  defp host_port!(container_id, command_runner) do
     {output, 0} =
-      System.cmd("docker", ["port", container_id, "5432/tcp"], stderr_to_stdout: true)
+      command_runner.("docker", ["port", container_id, "5432/tcp"], stderr_to_stdout: true)
 
     output
     |> String.trim()
@@ -82,14 +91,17 @@ defmodule OuterBrain.Persistence.PostgresContainer do
     |> String.to_integer()
   end
 
-  defp wait_until_ready!(port, attempts \\ 40)
-
-  defp wait_until_ready!(_port, 0) do
-    raise "dockerized Postgres did not become ready in time"
+  defp wait_until_ready!(port, command_runner, opts) do
+    OuterBrain.Persistence.BoundedAwait.until!(
+      label: "dockerized Postgres on port #{port}",
+      timeout_ms: Keyword.get(opts, :timeout_ms, 10_000),
+      interval_ms: Keyword.get(opts, :interval_ms, 250),
+      probe: fn -> postgres_ready?(port, command_runner) end
+    )
   end
 
-  defp wait_until_ready!(port, attempts) do
-    case System.cmd(
+  defp postgres_ready?(port, command_runner) do
+    case command_runner.(
            "psql",
            [
              "--host",
@@ -109,9 +121,8 @@ defmodule OuterBrain.Persistence.PostgresContainer do
       {_output, 0} ->
         :ok
 
-      _other ->
-        Process.sleep(250)
-        wait_until_ready!(port, attempts - 1)
+      {output, exit_status} ->
+        {:error, %{exit_status: exit_status, output: String.trim(output)}}
     end
   end
 end

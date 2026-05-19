@@ -39,6 +39,13 @@ Configuration is explicit caller data first, package option second, release prof
 
 This keeps durability opt-in visible at the caller boundary: no code path can silently enable Postgres persistence through global app configuration, and `OuterBrain.Persistence.Repo` receives the config that its caller supplied.
 
+## Test Container Readiness
+
+Dockerized Postgres test support uses a bounded readiness awaiter with explicit
+timeout and interval options. A readiness failure raises with the last probe's
+exit status and output, then removes the temporary container before returning
+control to the test process.
+
 ## Example Config
 
 ```elixir

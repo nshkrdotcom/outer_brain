@@ -45,15 +45,7 @@ defmodule OuterBrain.Prompting.ContextAdapterRegistry do
         registry
 
       :error ->
-        standalone_application_env_registry(opts)
-    end
-  end
-
-  defp standalone_application_env_registry(opts) do
-    if Keyword.get(opts, :standalone_application_env?, false) do
-      Application.get_env(:outer_brain_prompting, :context_adapters, %{})
-    else
-      %{}
+        %{}
     end
   end
 

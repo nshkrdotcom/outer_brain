@@ -7,6 +7,16 @@ defmodule OuterBrain.Memory.SidecarIndex do
   @key_fields [:tenant_ref, :snapshot_epoch, :sidecar_ref]
   @ordering_fields [:source_node_ref, :commit_lsn, :commit_hlc]
 
+  @spec posture() :: map()
+  def posture do
+    %{
+      classification: :caller_owned_private_ets,
+      authoritative?: false,
+      retention: :owner_process_lifetime,
+      production_long_lived?: false
+    }
+  end
+
   @spec new(keyword()) :: :ets.tid()
   def new(opts \\ []) when is_list(opts) do
     :ets.new(Keyword.get(opts, :name, @table_name), [:set, :private])
