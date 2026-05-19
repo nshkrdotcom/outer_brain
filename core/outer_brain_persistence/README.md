@@ -24,6 +24,13 @@ callers keep using ref-only contract records; this package remains the explicit
 raw Ecto/Postgres durable opt-in and is not required for default semantic
 runtime execution.
 
+The OTP application does not read app env to decide whether durable persistence
+is enabled. Hosts that need Postgres durability must supervise
+the persistence Repo child explicitly with their own repo config, or start it
+explicitly in tests with the Docker/container config. The dependency
+application remains inert by default so runtime configuration is not hidden in
+global app env.
+
 ## Persistence Documentation
 
 See `docs/persistence.md` for tiers, defaults, adapters, unsupported selections, config examples, restart claims, durability claims, debug sidecar behavior, redaction guarantees, migration or preflight behavior, and no-bypass scope when applicable.

@@ -33,6 +33,12 @@ Unsupported adapter selections fail before mutation. Silent fallback from durabl
 
 Configuration is explicit caller data first, package option second, release profile third, and built-in default last. Governed flows do not read process environment, local credential files, provider defaults, singleton clients, or application configuration as authority unless this package names a standalone boot boundary.
 
+## OTP Ownership And Repo Configuration
+
+`OuterBrain.Persistence.Application` is inert by default and does not read app env to start or configure Postgres. Hosts that need durable storage own the supervision decision by starting `OuterBrain.Persistence.Repo` with explicit config in their own supervision tree. Tests may start the repo directly with container-derived config.
+
+This keeps durability opt-in visible at the caller boundary: no code path can silently enable Postgres persistence through global app configuration, and `OuterBrain.Persistence.Repo` receives the config that its caller supplied.
+
 ## Example Config
 
 ```elixir

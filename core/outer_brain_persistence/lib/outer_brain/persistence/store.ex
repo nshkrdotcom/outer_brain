@@ -1,11 +1,13 @@
 defmodule OuterBrain.Persistence.Store do
   @moduledoc """
   Canonical durability API for restart-critical OuterBrain rows.
+
+  This module is the public facade. Profile policy, option parsing, row
+  mapping, and Ecto repository operations live in focused modules under
+  `OuterBrain.Persistence`.
   """
 
-  import Ecto.Query
-
-  alias OuterBrain.Contracts.{Fence, Lease, ReplyBodyBoundary, SemanticFailure}
+  alias OuterBrain.Contracts.{Lease, SemanticFailure}
 
   alias OuterBrain.Journal.Tables.{
     RecoveryTaskRecord,
@@ -13,508 +15,112 @@ defmodule OuterBrain.Persistence.Store do
     SemanticJournalEntryRecord
   }
 
-  alias OuterBrain.Persistence.Repo
-
-  alias OuterBrain.Persistence.Schemas.{
-    RecoveryTask,
-    ReplyPublication,
-    SemanticJournalEntry,
-    SemanticSessionLease
+  alias OuterBrain.Persistence.{
+    JournalRepository,
+    LeaseRepository,
+    ProfilePolicy,
+    RecoveryTaskRepository,
+    ReplyPublicationRepository,
+    SemanticFailureRepository,
+    TenantOptions
   }
 
-  @semantic_failure_entry_type "semantic_failure"
-  @recovery_reasons [:ambiguous_submission]
-  @recovery_reasons_by_schema Map.new(@recovery_reasons, &{Atom.to_string(&1), &1})
-
   @spec preflight(keyword() | map()) :: :ok | {:error, term()}
-  def preflight(opts \\ []) do
-    attrs = Map.new(opts)
-
-    case selected_profile(attrs) do
-      profile when profile in [:mickey_mouse, :memory_debug, :off] ->
-        :ok
-
-      :integration_postgres ->
-        require_migration_proof(attrs)
-
-      other ->
-        {:error, {:unsupported_persistence_tier, :outer_brain_persistence, other}}
-    end
-  end
+  def preflight(opts \\ []), do: ProfilePolicy.preflight(opts)
 
   @spec acquire_lease(Lease.t(), DateTime.t(), keyword()) ::
           {:ok, :acquired | :renewed, Lease.t()} | {:error, term()}
   def acquire_lease(%Lease{} = candidate, %DateTime{} = now, opts \\ []) do
-    repo = repo(opts)
-    tenant_id = tenant_id!(opts)
-
-    case repo.transaction(fn -> do_acquire_lease(repo, tenant_id, candidate, now) end) do
-      {:ok, {:ok, status, lease}} -> {:ok, status, lease}
-      {:error, reason} -> {:error, reason}
-    end
+    opts
+    |> TenantOptions.repo()
+    |> LeaseRepository.acquire(TenantOptions.tenant_id!(opts), candidate, now)
   end
 
   @spec fetch_current_lease(String.t(), String.t(), keyword()) :: {:ok, Lease.t()} | :error
   def fetch_current_lease(tenant_id, session_id, opts \\ [])
       when is_binary(tenant_id) and is_binary(session_id) do
-    repo = repo(opts)
-
-    case repo.get_by(SemanticSessionLease, tenant_id: tenant_id, session_id: session_id) do
-      nil -> :error
-      lease -> {:ok, schema_to_lease(lease)}
-    end
+    opts
+    |> TenantOptions.repo()
+    |> LeaseRepository.fetch_current(tenant_id, session_id)
   end
 
   @spec append_semantic_journal_entry(SemanticJournalEntryRecord.t(), keyword()) ::
           {:ok, SemanticJournalEntryRecord.t()} | {:error, Ecto.Changeset.t()}
   def append_semantic_journal_entry(%SemanticJournalEntryRecord{} = entry, opts \\ []) do
-    repo = repo(opts)
-    tenant_id = tenant_id!(opts)
-
-    %SemanticJournalEntry{}
-    |> SemanticJournalEntry.changeset(%{
-      entry_id: entry.entry_id,
-      tenant_id: tenant_id,
-      session_id: entry.session_id,
-      causal_unit_id: entry.causal_unit_id,
-      entry_type: entry.entry_type,
-      payload: entry.payload,
-      recorded_at: entry.recorded_at
-    })
-    |> repo.insert()
-    |> case do
-      {:ok, _schema} -> {:ok, entry}
-      {:error, changeset} -> {:error, changeset}
-    end
+    opts
+    |> TenantOptions.repo()
+    |> JournalRepository.append(TenantOptions.tenant_id!(opts), entry)
   end
 
   @spec journal_entries(String.t(), String.t(), keyword()) :: [SemanticJournalEntryRecord.t()]
   def journal_entries(tenant_id, session_id, opts \\ [])
       when is_binary(tenant_id) and is_binary(session_id) do
-    repo = repo(opts)
-
-    SemanticJournalEntry
-    |> where([entry], entry.tenant_id == ^tenant_id and entry.session_id == ^session_id)
-    |> order_by([entry], asc: entry.recorded_at, asc: entry.inserted_at)
-    |> repo.all()
-    |> Enum.map(&schema_to_journal_entry/1)
+    opts
+    |> TenantOptions.repo()
+    |> JournalRepository.list(tenant_id, session_id)
   end
 
   @spec record_recovery_task(RecoveryTaskRecord.t(), keyword()) ::
           {:ok, RecoveryTaskRecord.t()} | {:error, Ecto.Changeset.t() | term()}
-  def record_recovery_task(task, opts \\ [])
-
-  def record_recovery_task(%RecoveryTaskRecord{reason: reason} = task, opts)
-      when reason in @recovery_reasons do
-    repo = repo(opts)
-    tenant_id = tenant_id!(opts)
-
-    changeset =
-      RecoveryTask.changeset(%RecoveryTask{}, %{
-        task_id: task.task_id,
-        tenant_id: tenant_id,
-        session_id: task.session_id,
-        reason: Atom.to_string(task.reason),
-        status: task.status
-      })
-
-    case repo.insert(changeset,
-           on_conflict: [set: [reason: Atom.to_string(task.reason), status: task.status]],
-           conflict_target: :task_id
-         ) do
-      {:ok, _schema} -> {:ok, task}
-      {:error, changeset} -> {:error, changeset}
-    end
+  def record_recovery_task(%RecoveryTaskRecord{} = task, opts \\ []) do
+    opts
+    |> TenantOptions.repo()
+    |> RecoveryTaskRepository.record(TenantOptions.tenant_id!(opts), task)
   end
-
-  def record_recovery_task(%RecoveryTaskRecord{} = task, _opts),
-    do: {:error, {:invalid_recovery_task_reason, task.reason}}
 
   @spec pending_recovery_tasks(String.t(), String.t(), keyword()) :: [RecoveryTaskRecord.t()]
   def pending_recovery_tasks(tenant_id, session_id, opts \\ [])
       when is_binary(tenant_id) and is_binary(session_id) do
-    repo = repo(opts)
-
-    RecoveryTask
-    |> where(
-      [task],
-      task.tenant_id == ^tenant_id and task.session_id == ^session_id and task.status == :pending
-    )
-    |> order_by([task], asc: task.inserted_at)
-    |> repo.all()
-    |> Enum.map(&schema_to_recovery_task/1)
+    opts
+    |> TenantOptions.repo()
+    |> RecoveryTaskRepository.pending(tenant_id, session_id)
   end
 
   @spec record_reply_publication(ReplyPublicationRecord.t(), keyword()) ::
           {:ok, ReplyPublicationRecord.t()} | {:error, Ecto.Changeset.t() | term()}
   def record_reply_publication(%ReplyPublicationRecord{} = publication, opts \\ []) do
-    repo = repo(opts)
-    tenant_id = tenant_id!(opts)
-
-    case repo.transaction(fn -> do_record_reply_publication(repo, tenant_id, publication) end) do
-      {:ok, publication} -> {:ok, publication}
-      {:error, reason} -> {:error, reason}
-    end
+    opts
+    |> TenantOptions.repo()
+    |> ReplyPublicationRepository.record(TenantOptions.tenant_id!(opts), publication)
   end
 
   @spec reply_publications(String.t(), String.t(), keyword()) :: [ReplyPublicationRecord.t()]
   def reply_publications(tenant_id, causal_unit_id, opts \\ [])
       when is_binary(tenant_id) and is_binary(causal_unit_id) do
-    repo = repo(opts)
-
-    ReplyPublication
-    |> where(
-      [publication],
-      publication.tenant_id == ^tenant_id and publication.causal_unit_id == ^causal_unit_id
-    )
-    |> order_by([publication], asc: publication.inserted_at, asc: publication.publication_id)
-    |> repo.all()
-    |> Enum.map(&schema_to_reply_publication/1)
+    opts
+    |> TenantOptions.repo()
+    |> ReplyPublicationRepository.list(tenant_id, causal_unit_id)
   end
 
   @spec latest_publication(String.t(), String.t(), keyword()) :: ReplyPublicationRecord.t() | nil
   def latest_publication(tenant_id, causal_unit_id, opts \\ [])
       when is_binary(tenant_id) and is_binary(causal_unit_id) do
-    repo = repo(opts)
-
-    ReplyPublication
-    |> where(
-      [publication],
-      publication.tenant_id == ^tenant_id and publication.causal_unit_id == ^causal_unit_id
-    )
-    |> order_by(
-      [publication],
-      desc:
-        fragment(
-          "CASE WHEN ? = 'final' THEN 2 WHEN ? = 'provisional' THEN 1 ELSE 0 END",
-          publication.phase,
-          publication.phase
-        ),
-      desc: publication.updated_at
-    )
-    |> limit(1)
-    |> repo.one()
-    |> case do
-      nil -> nil
-      schema -> schema_to_reply_publication(schema)
-    end
-  end
-
-  @spec record_semantic_failure(SemanticFailure.t(), keyword()) ::
-          {:ok, SemanticFailure.t()} | {:error, term()}
-  def record_semantic_failure(%SemanticFailure{} = failure, opts \\ []) do
-    repo = repo(opts)
-    recorded_at = Keyword.get(opts, :recorded_at, DateTime.utc_now())
-    payload = SemanticFailure.to_payload(failure)
-
-    changeset =
-      SemanticJournalEntry.changeset(%SemanticJournalEntry{}, %{
-        entry_id: SemanticFailure.journal_entry_id(failure),
-        tenant_id: failure.tenant_id,
-        session_id: failure.semantic_session_id,
-        causal_unit_id: failure.causal_unit_id,
-        entry_type: @semantic_failure_entry_type,
-        payload: payload,
-        recorded_at: recorded_at
-      })
-
-    case repo.insert(changeset,
-           on_conflict: [set: [payload: payload, recorded_at: recorded_at]],
-           conflict_target: :entry_id,
-           returning: true
-         ) do
-      {:ok, schema} -> SemanticFailure.from_payload(schema.payload)
-      {:error, changeset} -> {:error, changeset}
-    end
-  end
-
-  @spec semantic_failure_entries(String.t(), String.t(), keyword()) :: [SemanticFailure.t()]
-  def semantic_failure_entries(tenant_id, session_id, opts \\ [])
-      when is_binary(tenant_id) and is_binary(session_id) do
-    repo = repo(opts)
-
-    SemanticJournalEntry
-    |> where(
-      [entry],
-      entry.tenant_id == ^tenant_id and entry.session_id == ^session_id and
-        entry.entry_type == ^@semantic_failure_entry_type
-    )
-    |> order_by([entry], asc: entry.recorded_at, asc: entry.inserted_at)
-    |> repo.all()
-    |> Enum.map(&semantic_failure_from_schema!/1)
+    opts
+    |> TenantOptions.repo()
+    |> ReplyPublicationRepository.latest(tenant_id, causal_unit_id)
   end
 
   @spec latest_publication_phase(String.t(), String.t(), keyword()) :: :final | :provisional | nil
   def latest_publication_phase(tenant_id, causal_unit_id, opts \\ [])
       when is_binary(tenant_id) and is_binary(causal_unit_id) do
-    repo = repo(opts)
-
-    ReplyPublication
-    |> where(
-      [publication],
-      publication.tenant_id == ^tenant_id and publication.causal_unit_id == ^causal_unit_id
-    )
-    |> order_by(
-      [publication],
-      desc:
-        fragment(
-          "CASE WHEN ? = 'final' THEN 2 WHEN ? = 'provisional' THEN 1 ELSE 0 END",
-          publication.phase,
-          publication.phase
-        ),
-      desc: publication.updated_at
-    )
-    |> select([publication], publication.phase)
-    |> limit(1)
-    |> repo.one()
+    opts
+    |> TenantOptions.repo()
+    |> ReplyPublicationRepository.latest_phase(tenant_id, causal_unit_id)
   end
 
-  defp do_record_reply_publication(repo, tenant_id, publication) do
-    existing =
-      ReplyPublication
-      |> where(
-        [schema],
-        schema.tenant_id == ^tenant_id and schema.dedupe_key == ^publication.dedupe_key
-      )
-      |> lock("FOR UPDATE")
-      |> repo.one()
-
-    case existing do
-      nil ->
-        insert_reply_publication(repo, tenant_id, publication)
-
-      %ReplyPublication{} = schema ->
-        update_idempotent_reply_publication(repo, schema, tenant_id, publication)
-    end
+  @spec record_semantic_failure(SemanticFailure.t(), keyword()) ::
+          {:ok, SemanticFailure.t()} | {:error, term()}
+  def record_semantic_failure(%SemanticFailure{} = failure, opts \\ []) do
+    opts
+    |> TenantOptions.repo()
+    |> SemanticFailureRepository.record(failure, TenantOptions.recorded_at(opts))
   end
 
-  defp insert_reply_publication(repo, tenant_id, publication) do
-    changeset =
-      ReplyPublication.changeset(
-        %ReplyPublication{},
-        reply_publication_attrs(tenant_id, publication)
-      )
-
-    case repo.insert(changeset, returning: true) do
-      {:ok, schema} -> schema_to_reply_publication(schema)
-      {:error, changeset} -> repo.rollback(changeset)
-    end
+  @spec semantic_failure_entries(String.t(), String.t(), keyword()) :: [SemanticFailure.t()]
+  def semantic_failure_entries(tenant_id, session_id, opts \\ [])
+      when is_binary(tenant_id) and is_binary(session_id) do
+    opts
+    |> TenantOptions.repo()
+    |> SemanticFailureRepository.list(tenant_id, session_id)
   end
-
-  defp update_idempotent_reply_publication(repo, schema, tenant_id, publication) do
-    if ReplyBodyBoundary.equivalent_ref?(schema.body_ref, publication.body_ref) do
-      attrs =
-        reply_publication_attrs(tenant_id, publication)
-        |> Map.put(:publication_id, schema.publication_id)
-
-      changeset = ReplyPublication.changeset(schema, attrs)
-
-      case repo.update(changeset) do
-        {:ok, schema} -> schema_to_reply_publication(schema)
-        {:error, changeset} -> repo.rollback(changeset)
-      end
-    else
-      repo.rollback(
-        {:reply_publication_body_ref_mismatch,
-         %{
-           dedupe_key: publication.dedupe_key,
-           existing_body_hash: ReplyBodyBoundary.body_hash(schema.body_ref),
-           replay_body_hash: ReplyBodyBoundary.body_hash(publication.body_ref),
-           safe_action: :quarantine_duplicate_replay
-         }}
-      )
-    end
-  end
-
-  defp reply_publication_attrs(tenant_id, publication) do
-    %{
-      publication_id: publication.publication_id,
-      tenant_id: tenant_id,
-      causal_unit_id: publication.causal_unit_id,
-      phase: publication.phase,
-      state: publication.state,
-      dedupe_key: publication.dedupe_key,
-      body: publication.body,
-      body_ref: publication.body_ref
-    }
-  end
-
-  defp do_acquire_lease(repo, tenant_id, candidate, now) do
-    current =
-      SemanticSessionLease
-      |> where(
-        [lease],
-        lease.tenant_id == ^tenant_id and lease.session_id == ^candidate.session_id
-      )
-      |> lock("FOR UPDATE")
-      |> repo.one()
-
-    case current do
-      nil ->
-        persist_new_lease(repo, tenant_id, candidate, :acquired)
-
-      %SemanticSessionLease{} = persisted ->
-        current_lease = schema_to_lease(persisted)
-
-        cond do
-          same_lease?(current_lease, candidate) ->
-            persist_existing_lease(repo, persisted, tenant_id, candidate, :renewed)
-
-          Lease.expired?(current_lease, now) and candidate.epoch > current_lease.epoch ->
-            persist_existing_lease(repo, persisted, tenant_id, candidate, :acquired)
-
-          Lease.expired?(current_lease, now) ->
-            repo.rollback({:stale_epoch, Fence.from_lease(current_lease)})
-
-          true ->
-            repo.rollback({:held_by_other, Fence.from_lease(current_lease)})
-        end
-    end
-  end
-
-  defp persist_new_lease(repo, tenant_id, candidate, status) do
-    changeset =
-      SemanticSessionLease.changeset(%SemanticSessionLease{}, %{
-        row_id: row_id(tenant_id, candidate.session_id),
-        tenant_id: tenant_id,
-        session_id: candidate.session_id,
-        holder: candidate.holder,
-        lease_id: candidate.lease_id,
-        epoch: candidate.epoch,
-        expires_at: candidate.expires_at
-      })
-
-    case repo.insert(changeset) do
-      {:ok, _schema} -> {:ok, status, candidate}
-      {:error, changeset} -> repo.rollback(changeset)
-    end
-  end
-
-  defp persist_existing_lease(repo, persisted, tenant_id, candidate, status) do
-    changeset =
-      SemanticSessionLease.changeset(persisted, %{
-        tenant_id: tenant_id,
-        holder: candidate.holder,
-        lease_id: candidate.lease_id,
-        epoch: candidate.epoch,
-        expires_at: candidate.expires_at
-      })
-
-    case repo.update(changeset) do
-      {:ok, _schema} -> {:ok, status, candidate}
-      {:error, changeset} -> repo.rollback(changeset)
-    end
-  end
-
-  defp same_lease?(current, candidate) do
-    current.holder == candidate.holder and current.lease_id == candidate.lease_id and
-      current.epoch == candidate.epoch
-  end
-
-  defp schema_to_lease(schema) do
-    %Lease{
-      session_id: schema.session_id,
-      holder: schema.holder,
-      lease_id: schema.lease_id,
-      epoch: schema.epoch,
-      expires_at: schema.expires_at
-    }
-  end
-
-  defp schema_to_journal_entry(schema) do
-    {:ok, entry} =
-      SemanticJournalEntryRecord.new(%{
-        entry_id: schema.entry_id,
-        session_id: schema.session_id,
-        causal_unit_id: schema.causal_unit_id,
-        entry_type: schema.entry_type,
-        recorded_at: schema.recorded_at,
-        payload: schema.payload
-      })
-
-    entry
-  end
-
-  defp schema_to_recovery_task(schema) do
-    %RecoveryTaskRecord{
-      task_id: schema.task_id,
-      session_id: schema.session_id,
-      reason: recovery_reason!(schema.reason),
-      status: schema.status
-    }
-  end
-
-  defp recovery_reason!(reason) when is_binary(reason) do
-    case Map.fetch(@recovery_reasons_by_schema, reason) do
-      {:ok, reason_atom} ->
-        reason_atom
-
-      :error ->
-        raise ArgumentError, "unknown recovery task reason: #{inspect(reason)}"
-    end
-  end
-
-  defp schema_to_reply_publication(schema) do
-    {:ok, publication} =
-      ReplyPublicationRecord.new(%{
-        publication_id: schema.publication_id,
-        causal_unit_id: schema.causal_unit_id,
-        phase: schema.phase,
-        state: schema.state,
-        dedupe_key: schema.dedupe_key,
-        body: schema.body,
-        body_ref: schema.body_ref
-      })
-
-    publication
-  end
-
-  defp semantic_failure_from_schema!(schema) do
-    case SemanticFailure.from_payload(schema.payload) do
-      {:ok, failure} ->
-        failure
-
-      {:error, reason} ->
-        raise ArgumentError, "invalid semantic failure payload: #{inspect(reason)}"
-    end
-  end
-
-  defp repo(opts), do: Keyword.get(opts, :repo, Repo)
-
-  defp selected_profile(attrs) do
-    attrs
-    |> Map.get(:profile, Map.get(attrs, "profile"))
-    |> case do
-      nil ->
-        Map.get(attrs, :persistence_profile, Map.get(attrs, "persistence_profile", :mickey_mouse))
-
-      profile ->
-        profile
-    end
-    |> normalize_profile()
-  end
-
-  defp normalize_profile("mickey_mouse"), do: :mickey_mouse
-  defp normalize_profile("memory_debug"), do: :memory_debug
-  defp normalize_profile("off"), do: :off
-  defp normalize_profile("integration_postgres"), do: :integration_postgres
-  defp normalize_profile(profile), do: profile
-
-  defp require_migration_proof(attrs) do
-    case Map.get(attrs, :migration_proof) || Map.get(attrs, "migration_proof") do
-      :present -> :ok
-      true -> :ok
-      paths when is_list(paths) and paths != [] -> :ok
-      _missing -> {:error, {:missing_migration_proof, :outer_brain_persistence}}
-    end
-  end
-
-  defp tenant_id!(opts) do
-    case Keyword.get(opts, :tenant_id) do
-      tenant_id when is_binary(tenant_id) and tenant_id != "" -> tenant_id
-      _other -> raise ArgumentError, "outer_brain persistence calls require :tenant_id"
-    end
-  end
-
-  defp row_id(tenant_id, session_id), do: "lease:#{tenant_id}:#{session_id}"
 end
