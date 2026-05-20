@@ -43,7 +43,7 @@ and proving examples.
 ## Implementation Notes
 
 Maintainers should read
-[Code Smell Remediation](guides/code_smell_remediation.md) before changing
+[Code Smell Remediation](https://github.com/nshkrdotcom/outer_brain/blob/main/guides/code_smell_remediation.md) before changing
 memory/artifact contracts, persistence stores, lease ownership, private cache
 lifecycle, or proof readiness helpers.
 
