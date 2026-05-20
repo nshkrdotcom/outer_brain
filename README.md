@@ -40,6 +40,13 @@ Active workspace buildout. The repo uses a non-umbrella workspace layout with
 core packages, a dedicated raw-Ecto persistence layer, bridges, a host surface,
 and proving examples.
 
+## Implementation Notes
+
+Maintainers should read
+[Code Smell Remediation](guides/code_smell_remediation.md) before changing
+memory/artifact contracts, persistence stores, lease ownership, private cache
+lifecycle, or proof readiness helpers.
+
 ## Stack Position And Runtime Shape
 
 OuterBrain is the semantic layer above deterministic authority and below host
