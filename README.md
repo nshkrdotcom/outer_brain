@@ -103,6 +103,21 @@ metering, eval-runner support, adaptive artifact identity, optimization
 artifact graph history, semantic persistence posture, authority evidence
 projection, and cleanup of env/regex/atom hazards.
 
+The Synapse governed-effect lift does not make OuterBrain a runtime or
+connector owner. The staged-live diagnostic lane is deterministic operational
+work, so it runs through AppKit, Mezzanine, Citadel, Jido Integration,
+Execution Plane, and AITrace without importing OuterBrain semantic runtime
+modules into Synapse. OuterBrain remains the owner for future semantic context,
+prompt, memory, guardrail, eval, and quality evidence that may be attached to a
+governed effect through product-safe AppKit projections.
+
+The cross-stack diagnostic proof is owned by StackLab:
+
+```bash
+cd /home/home/p/g/n/stack_lab
+MIX_ENV=test mix stack_lab.synapse.staged_live.v1 --json
+```
+
 ## Ownership Rules
 
 OuterBrain may normalize semantic failures such as stale context, route
