@@ -53,6 +53,20 @@ Context adapters are read-only contributors to context-pack assembly. They
 receive bounded request data and runtime binding configuration, return
 provenance-bearing fragments, and do not own semantic-session truth.
 
+## Context ABI Surface
+
+`core/context_abi` owns the ref-only Context ABI packet, context unit, compile
+receipt, and owner-local failure shape for governed model execution. It uses
+GroundPlane canonical boundary encoding for deterministic packet hashes and
+does not render provider-native payloads, authorize restricted data, or own
+durable workflow truth.
+
+`core/outer_brain_prompting` consumes admitted Context ABI packets through
+`OuterBrain.Prompting.ContextRenderer`. The deterministic fixture renderer
+returns `prompt_artifact_ref`, `provider_payload_ref`, token estimate, and
+`payload_hash` values for StackLab proof without exposing raw prompts or
+provider payload bodies.
+
 ## Adaptive Artifact Identity
 
 `core/ai_artifact_contracts` owns ref-only adaptive artifact identity for

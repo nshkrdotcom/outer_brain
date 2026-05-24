@@ -28,8 +28,10 @@ defmodule OuterBrain.Prompting.MixProject do
 
   defp deps do
     [
+      {:outer_brain_context_abi, path: "../context_abi"},
       {:outer_brain_contracts, path: "../outer_brain_contracts"},
       {:outer_brain_core, path: "../outer_brain_core"},
+      {:outer_brain_token_meter, path: "../token_meter"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false}

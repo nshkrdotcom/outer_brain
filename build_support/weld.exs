@@ -11,6 +11,12 @@ defmodule OuterBrain.Build.WeldContract do
 
   @repo_root Path.expand("..", __DIR__)
 
+  @manifest_dependencies [
+    :ground_plane_contracts,
+    :jido_integration_provider_classification,
+    :mezzanine_eval_engine
+  ]
+
   @artifact_docs [
     "README.md",
     "docs/overview.md",
@@ -33,6 +39,7 @@ defmodule OuterBrain.Build.WeldContract do
       publication: [
         internal_only: [
           ".",
+          "core/context_abi",
           "core/memory_contracts",
           "core/memory_engine",
           "core/context_budget",
@@ -77,22 +84,37 @@ defmodule OuterBrain.Build.WeldContract do
   end
 
   defp dependencies do
-    [
-      mezzanine_eval_engine: manifest_dependency(:mezzanine_eval_engine)
-    ]
+    Enum.map(@manifest_dependencies, fn app ->
+      {app, manifest_dependency(app)}
+    end)
   end
 
   defp manifest_dependency(app) do
-    case DependencySources.deps(@repo_root, publish?: true) |> List.keyfind(app, 0) do
-      {^app, requirement} when is_binary(requirement) ->
-        [requirement: requirement]
+    config = Map.fetch!(dependency_configs(), app)
+    github = Map.fetch!(config, :github)
 
-      {^app, requirement, opts} when is_binary(requirement) ->
-        [requirement: requirement, opts: opts]
+    [opts: github_opts(github)]
+  end
 
-      {^app, opts} when is_list(opts) ->
-        [opts: opts]
-    end
+  defp dependency_configs do
+    {config, _binding} =
+      @repo_root
+      |> Path.join("build_support/dependency_sources.config.exs")
+      |> Code.eval_file()
+
+    Map.new(config[:deps], fn {app, dep_config} -> {app, Map.new(dep_config)} end)
+  end
+
+  defp github_opts(github) do
+    github = Map.new(github)
+    repo = Map.fetch!(github, :repo)
+
+    opts =
+      github
+      |> Map.take([:branch, :ref, :tag, :subdir])
+      |> Enum.sort_by(fn {key, _value} -> key end)
+
+    Keyword.merge([github: repo], opts)
   end
 end
 

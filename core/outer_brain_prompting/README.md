@@ -3,6 +3,12 @@
 Context-pack construction, strategy profiles, tool gating, and replayable prompt
 assembly helpers.
 
+`OuterBrain.Prompting.ContextRenderer` is the Context ABI rendering seam. It
+consumes admitted `OuterBrain.ContextABI.ContextPacket` values and returns
+prompt/provider payload refs, a deterministic payload hash, and token estimate
+metadata. The fixture renderer is deterministic and CI-safe; live provider
+payload rendering remains an explicit later profile.
+
 Context adapters are provider-neutral read surfaces. They receive a bounded
 read-only request plus runtime binding configuration and return
 provenance-bearing fragments. The context pack records source reports,

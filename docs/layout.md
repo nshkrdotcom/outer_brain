@@ -8,6 +8,7 @@ Key groups:
 - `core/outer_brain_journal`
 - `core/outer_brain_persistence`
 - `core/outer_brain_core`
+- `core/context_abi`
 - `core/outer_brain_prompting`
 - `core/outer_brain_quality`
 - `core/outer_brain_runtime`

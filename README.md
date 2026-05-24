@@ -78,8 +78,8 @@ The workspace currently contains these active families:
   `outer_brain_persistence`, `outer_brain_runtime`,
   `outer_brain_restart_authority`, and `outer_brain_quality` for the core
   semantic runtime.
-- `outer_brain_prompting`, `prompt_fabric`, `context_budget`,
-  `memory_contracts`, `memory_engine`, `guardrail_contracts`,
+- `outer_brain_context_abi`, `outer_brain_prompting`, `prompt_fabric`,
+  `context_budget`, `memory_contracts`, `memory_engine`, `guardrail_contracts`,
   `guardrail_engine`, `eval_runner`, and `token_meter` for prompt/context,
   memory, guardrail, eval, and cost-sensitive semantic support.
 - `outer_brain_authority_evidence`, `ai_artifact_contracts`, and
@@ -181,6 +181,8 @@ Adaptive layer additions:
 - `core/ai_artifact_contracts`: ref-only artifact identity for prompt, role,
   skill, GEPA, eval, replay, router, provider, endpoint, promotion, and
   rollback refs.
+- `core/context_abi`: ref-only Context ABI packet/unit/receipt/failure
+  contracts and deterministic packet hashes for governed model execution.
 - `core/optimization_artifact_store`: ref-only artifact graph history for
   candidate lineage, eval evidence, promotion, and rollback decisions.
 
