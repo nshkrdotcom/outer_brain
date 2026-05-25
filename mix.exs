@@ -144,6 +144,9 @@ defmodule OuterBrain.Workspace.MixProject do
         "docs/layout.md",
         "docs/runtime_model.md",
         "docs/integration_surface.md",
+        "guides/context_abi.md",
+        "guides/generalized_stack.md",
+        "guides/qc_and_operations.md",
         "guides/code_smell_remediation.md",
         "CHANGELOG.md",
         "LICENSE"
@@ -152,7 +155,12 @@ defmodule OuterBrain.Workspace.MixProject do
         Overview: ["README.md", "docs/overview.md"],
         Architecture: ["docs/layout.md", "docs/runtime_model.md"],
         Integration: ["docs/integration_surface.md"],
-        Guides: ["guides/code_smell_remediation.md"],
+        Guides: [
+          "guides/context_abi.md",
+          "guides/generalized_stack.md",
+          "guides/qc_and_operations.md",
+          "guides/code_smell_remediation.md"
+        ],
         Project: ["CHANGELOG.md", "LICENSE"]
       ]
     ]

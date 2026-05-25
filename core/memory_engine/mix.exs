@@ -16,7 +16,14 @@ defmodule OuterBrain.MemoryEngine.MixProject do
   end
 
   def application do
-    [extra_applications: [:crypto, :logger]]
+    [
+      extra_applications: [
+        :crypto,
+        :logger,
+        :outer_brain_guardrail_engine,
+        :outer_brain_memory_contracts
+      ]
+    ]
   end
 
   def cli do

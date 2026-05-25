@@ -234,20 +234,24 @@ defmodule OuterBrain.ContextABI.Failure do
   defp owner(_owner), do: {:error, :invalid_failure_owner}
 
   defp infer_family(reason_code) do
-    cond do
-      String.contains?(reason_code, ".context.") -> {:ok, :context}
-      String.contains?(reason_code, ".authority.") -> {:ok, :authority}
-      String.contains?(reason_code, ".route.") -> {:ok, :router}
-      String.contains?(reason_code, ".model_") -> {:ok, :model_execution}
-      String.contains?(reason_code, ".inference.") -> {:ok, :model_execution}
-      String.contains?(reason_code, ".eval.") -> {:ok, :eval}
-      String.contains?(reason_code, ".memory.") -> {:ok, :memory}
-      String.contains?(reason_code, ".optimization.") -> {:ok, :optimization}
-      String.contains?(reason_code, ".promotion.") -> {:ok, :promotion}
-      String.contains?(reason_code, ".rollback.") -> {:ok, :promotion}
-      String.contains?(reason_code, ".evidence.") -> {:ok, :evidence}
-      String.contains?(reason_code, ".replay.") -> {:ok, :evidence}
-      true -> {:error, :unknown_failure_family}
+    case Enum.find(@family_prefixes, fn {prefix, _family} ->
+           String.starts_with?(reason_code, prefix)
+         end) do
+      {_prefix, family} -> {:ok, family}
+      nil -> infer_family_from_fragment(reason_code)
+    end
+  end
+
+  defp infer_family_from_fragment(reason_code) do
+    [
+      {".model_", :model_execution},
+      {".inference.", :model_execution},
+      {".rollback.", :promotion}
+    ]
+    |> Enum.find(fn {fragment, _family} -> String.contains?(reason_code, fragment) end)
+    |> case do
+      {_fragment, family} -> {:ok, family}
+      nil -> {:error, :unknown_failure_family}
     end
   end
 
