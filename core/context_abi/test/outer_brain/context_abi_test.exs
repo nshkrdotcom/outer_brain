@@ -119,6 +119,13 @@ defmodule OuterBrain.ContextABITest do
              })
 
     assert failure.owner == :citadel
+    assert {:ok, :authority} = Failure.family_for(failure)
+
+    assert {:ok, summary} = Failure.summary(failure)
+    assert summary.failure_ref =~ ~r/^failure:\/\/citadel\/[0-9a-f]{64}$/
+    assert summary.failure_family == :authority
+    assert summary.product_summary == "The requested action was not authorized."
+    assert summary.safe_action == :deny_or_refresh_authority
 
     assert {:error, :reason_code_owner_mismatch} =
              Failure.new(%{
