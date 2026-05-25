@@ -61,6 +61,16 @@ defmodule OuterBrain.ContextABITest do
     assert nested_failure.reason_code == "outer_brain.context.raw_payload_rejected.v1"
   end
 
+  test "compiler rejects unpromoted memory candidate refs in production packets" do
+    assert {:error, %Failure{} = failure} =
+             compile_request()
+             |> Map.put(:memory_refs, ["memory-candidate://tenant-a/unpromoted/a"])
+             |> ContextABI.compile()
+
+    assert failure.reason_code == "outer_brain.context.unpromoted_memory_candidate.v1"
+    assert failure.evidence_refs == ["memory-candidate://tenant-a/unpromoted/a"]
+  end
+
   test "context units validate vocabulary and reject raw metadata payloads" do
     assert {:ok, %ContextUnit{} = unit} =
              ContextUnit.new(%{

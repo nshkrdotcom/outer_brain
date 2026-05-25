@@ -136,6 +136,34 @@ defmodule OuterBrain.MemoryContractsTest do
              |> MemoryContracts.query_intent()
   end
 
+  test "memory candidates are ref-only and require bounded eval evidence" do
+    assert {:ok, candidate} = MemoryContracts.memory_candidate(valid_memory_candidate())
+
+    assert candidate.status == :candidate
+    assert candidate.memory_ref.memory_id == "mem-1"
+    assert candidate.evidence_ref.memory_id == "mem-1"
+    assert candidate.eval_evidence_refs == ["eval://memory/a"]
+
+    assert {:error, {:missing_candidate_ref, :eval_evidence_refs}} =
+             valid_memory_candidate()
+             |> Map.put(:eval_evidence_refs, [])
+             |> MemoryContracts.memory_candidate()
+
+    assert {:error, {:raw_memory_body_forbidden, :memory_body}} =
+             valid_memory_candidate()
+             |> Map.put(:memory_body, "raw")
+             |> MemoryContracts.memory_candidate()
+  end
+
+  test "candidate status vocabulary distinguishes candidate, promoted, and rolled back" do
+    assert MemoryContracts.memory_candidate_statuses() == [:candidate, :promoted, :rolled_back]
+
+    assert {:error, {:invalid_candidate_status, :unknown}} =
+             valid_memory_candidate()
+             |> Map.put(:status, :unknown)
+             |> MemoryContracts.memory_candidate()
+  end
+
   defp valid_write_intent do
     %{
       tenant_ref: "tenant://a",
@@ -208,6 +236,20 @@ defmodule OuterBrain.MemoryContractsTest do
       authority_ref: "authority://a",
       installation_ref: "installation://a",
       trace_ref: "trace://a"
+    }
+  end
+
+  defp valid_memory_candidate do
+    %{
+      candidate_ref: "memory-candidate://tenant-a/a",
+      tenant_ref: "tenant://a",
+      memory_ref: valid_memory_ref(),
+      evidence_ref: valid_evidence_ref(),
+      eval_evidence_refs: ["eval://memory/a"],
+      authority_ref: "authority://citadel/memory/a",
+      trace_ref: "trace://a",
+      redaction_policy_ref: "policy://redact",
+      status: :candidate
     }
   end
 end

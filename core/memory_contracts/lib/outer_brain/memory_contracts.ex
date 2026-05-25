@@ -12,6 +12,7 @@ defmodule OuterBrain.MemoryContracts do
     ContextBudgetDecision,
     ContextBudgetRef,
     MemoryAccessReason,
+    MemoryCandidate,
     MemoryEvidenceRef,
     MemoryQueryIntent,
     MemoryRedactionPolicy,
@@ -38,6 +39,9 @@ defmodule OuterBrain.MemoryContracts do
 
   @spec budget_exhaustion_reasons() :: [atom()]
   def budget_exhaustion_reasons, do: Vocabulary.budget_exhaustion_reasons()
+
+  @spec memory_candidate_statuses() :: [atom()]
+  def memory_candidate_statuses, do: Vocabulary.memory_candidate_statuses()
 
   @spec scope_key(map() | MemoryScopeKey.t()) :: {:ok, MemoryScopeKey.t()} | error()
   def scope_key(attrs), do: MemoryScopeKey.new(attrs)
@@ -68,6 +72,9 @@ defmodule OuterBrain.MemoryContracts do
 
   @spec query_intent(map() | MemoryQueryIntent.t()) :: {:ok, MemoryQueryIntent.t()} | error()
   def query_intent(attrs), do: MemoryQueryIntent.new(attrs)
+
+  @spec memory_candidate(map() | MemoryCandidate.t()) :: {:ok, MemoryCandidate.t()} | error()
+  def memory_candidate(attrs), do: MemoryCandidate.new(attrs)
 
   @spec fetch_value(map(), atom()) :: term()
   def fetch_value(attrs, field), do: Validator.fetch_value(attrs, field)

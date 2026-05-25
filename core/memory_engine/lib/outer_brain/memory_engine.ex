@@ -170,6 +170,61 @@ defmodule OuterBrain.MemoryEngine do
     end
   end
 
+  @spec candidate_from_evidence(map()) ::
+          {:ok, MemoryContracts.MemoryCandidate.t()} | {:error, term()}
+  def candidate_from_evidence(attrs) when is_map(attrs) do
+    attrs
+    |> Map.put_new(:status, :candidate)
+    |> MemoryContracts.memory_candidate()
+  end
+
+  @spec promote_candidate(MemoryContracts.MemoryCandidate.t() | map(), map()) ::
+          {:ok, MemoryContracts.MemoryCandidate.t()} | {:error, term()}
+  def promote_candidate(candidate_or_attrs, attrs) when is_map(attrs) do
+    with {:ok, candidate} <- MemoryContracts.memory_candidate(candidate_or_attrs),
+         {:ok, promotion_ref} <- required_string(attrs, :promotion_ref),
+         {:ok, citadel_authority_ref} <- required_string(attrs, :citadel_authority_ref),
+         {:ok, eval_refs} <- non_empty_strings(attrs, :eval_evidence_refs) do
+      MemoryContracts.memory_candidate(%{
+        candidate
+        | status: :promoted,
+          promotion_ref: promotion_ref,
+          authority_ref: citadel_authority_ref,
+          eval_evidence_refs: eval_refs
+      })
+    else
+      {:error, {:missing_ref, :eval_evidence_refs}} ->
+        {:error, :memory_candidate_eval_gate_required}
+
+      {:error, {:missing_ref, :citadel_authority_ref}} ->
+        {:error, :memory_candidate_citadel_gate_required}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @spec rollback_candidate(MemoryContracts.MemoryCandidate.t() | map(), map()) ::
+          {:ok, MemoryContracts.MemoryCandidate.t()} | {:error, term()}
+  def rollback_candidate(candidate_or_attrs, attrs) when is_map(attrs) do
+    with {:ok, candidate} <- MemoryContracts.memory_candidate(candidate_or_attrs),
+         {:ok, rollback_ref} <- required_string(attrs, :rollback_ref),
+         {:ok, citadel_authority_ref} <- required_string(attrs, :citadel_authority_ref) do
+      MemoryContracts.memory_candidate(%{
+        candidate
+        | status: :rolled_back,
+          rollback_ref: rollback_ref,
+          authority_ref: citadel_authority_ref
+      })
+    else
+      {:error, {:missing_ref, :citadel_authority_ref}} ->
+        {:error, :memory_candidate_citadel_gate_required}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   defp evidence(raw_body, max_export_bytes) when byte_size(raw_body) > max_export_bytes do
     {:ok, sha256(raw_body), "body_oversize_replaced_by_hash_ref"}
   end
@@ -244,4 +299,25 @@ defmodule OuterBrain.MemoryEngine do
   defp scope_tier(%MemoryContracts.MemoryScopeKey{run_ref: nil, agent_ref: nil}), do: :semantic
   defp scope_tier(%MemoryContracts.MemoryScopeKey{skill_ref: nil}), do: :episodic
   defp scope_tier(%MemoryContracts.MemoryScopeKey{}), do: :working
+
+  defp required_string(attrs, field) do
+    case Map.get(attrs, field) || Map.get(attrs, Atom.to_string(field)) do
+      value when is_binary(value) and value != "" -> {:ok, value}
+      _other -> {:error, {:missing_ref, field}}
+    end
+  end
+
+  defp non_empty_strings(attrs, field) do
+    case Map.get(attrs, field) || Map.get(attrs, Atom.to_string(field)) do
+      values when is_list(values) and values != [] ->
+        if Enum.all?(values, &(is_binary(&1) and String.trim(&1) != "")) do
+          {:ok, Enum.uniq(values)}
+        else
+          {:error, {:missing_ref, field}}
+        end
+
+      _other ->
+        {:error, {:missing_ref, field}}
+    end
+  end
 end

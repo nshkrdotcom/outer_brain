@@ -5,13 +5,19 @@ defmodule OuterBrain.MemoryContracts.Vocabulary do
     :body,
     :raw_body,
     :content,
+    :memory_body,
+    :model_output,
     :raw_content,
+    :raw_memory,
     :payload,
     :raw_payload,
     "body",
     "raw_body",
     "content",
+    "memory_body",
+    "model_output",
     "raw_content",
+    "raw_memory",
     "payload",
     "raw_payload"
   ]
@@ -60,6 +66,8 @@ defmodule OuterBrain.MemoryContracts.Vocabulary do
     :operator_override_denied
   ]
 
+  @memory_candidate_statuses [:candidate, :promoted, :rolled_back]
+
   @spec raw_payload_keys() :: [atom() | String.t()]
   def raw_payload_keys, do: @raw_payload_keys
 
@@ -80,4 +88,7 @@ defmodule OuterBrain.MemoryContracts.Vocabulary do
 
   @spec budget_exhaustion_reasons() :: [atom()]
   def budget_exhaustion_reasons, do: @budget_reasons
+
+  @spec memory_candidate_statuses() :: [atom()]
+  def memory_candidate_statuses, do: @memory_candidate_statuses
 end

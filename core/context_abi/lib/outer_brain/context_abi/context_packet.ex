@@ -49,6 +49,7 @@ defmodule OuterBrain.ContextABI.ContextPacket do
          {:ok, system_instruction_ref} <-
            Validator.required_string(attrs, :system_instruction_ref),
          {:ok, memory_refs} <- Validator.string_list(attrs, :memory_refs),
+         :ok <- reject_unpromoted_memory_refs(memory_refs),
          {:ok, budget_ref} <- Validator.required_string(attrs, :budget_ref),
          {:ok, model_class_allowlist} <- Validator.string_list(attrs, :model_class_allowlist),
          :ok <- require_nonempty(model_class_allowlist, :model_class_allowlist),
@@ -126,4 +127,20 @@ defmodule OuterBrain.ContextABI.ContextPacket do
   end
 
   defp require_nonempty(_values, _field), do: :ok
+
+  defp reject_unpromoted_memory_refs(memory_refs) do
+    case Enum.find(memory_refs, &unpromoted_memory_ref?/1) do
+      nil ->
+        :ok
+
+      ref ->
+        Validator.failure(:outer_brain, "outer_brain.context.unpromoted_memory_candidate.v1",
+          safe_message: "unpromoted memory candidates cannot enter production context packets",
+          evidence_refs: [ref]
+        )
+    end
+  end
+
+  defp unpromoted_memory_ref?("memory-candidate://" <> _suffix), do: true
+  defp unpromoted_memory_ref?(ref), do: String.contains?(ref, "/candidate/")
 end

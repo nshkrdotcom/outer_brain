@@ -78,6 +78,52 @@ defmodule OuterBrain.MemoryEngineTest do
     assert {:ok, []} = MemoryEngine.query(store, query_intent())
   end
 
+  test "creates, promotes, and rolls back memory candidates through bounded refs" do
+    assert {:ok, store, memory_ref, evidence_ref} =
+             MemoryEngine.write(MemoryEngine.new(), write_intent(), "bounded memory")
+
+    assert {:ok, candidate} =
+             MemoryEngine.candidate_from_evidence(%{
+               candidate_ref: "memory-candidate://tenant-a/a",
+               tenant_ref: "tenant://a",
+               memory_ref: memory_ref,
+               evidence_ref: evidence_ref,
+               eval_evidence_refs: ["eval://memory/a"],
+               authority_ref: "authority://citadel/memory/a",
+               trace_ref: "trace://a",
+               redaction_policy_ref: "policy://redact"
+             })
+
+    assert candidate.status == :candidate
+
+    assert {:error, :memory_candidate_eval_gate_required} =
+             MemoryEngine.promote_candidate(candidate, %{
+               promotion_ref: "memory-promotion://tenant-a/a",
+               citadel_authority_ref: "authority://citadel/promotion/a",
+               eval_evidence_refs: []
+             })
+
+    assert {:ok, promoted} =
+             MemoryEngine.promote_candidate(candidate, %{
+               promotion_ref: "memory-promotion://tenant-a/a",
+               citadel_authority_ref: "authority://citadel/promotion/a",
+               eval_evidence_refs: ["eval://memory/a"]
+             })
+
+    assert promoted.status == :promoted
+    assert promoted.promotion_ref == "memory-promotion://tenant-a/a"
+
+    assert {:ok, rolled_back} =
+             MemoryEngine.rollback_candidate(promoted, %{
+               rollback_ref: "memory-rollback://tenant-a/a",
+               citadel_authority_ref: "authority://citadel/rollback/a"
+             })
+
+    assert rolled_back.status == :rolled_back
+    assert rolled_back.rollback_ref == "memory-rollback://tenant-a/a"
+    assert {:ok, _projection} = MemoryEngine.project(store, memory_ref)
+  end
+
   defp write_intent(overrides \\ %{}) do
     Map.merge(
       %{
