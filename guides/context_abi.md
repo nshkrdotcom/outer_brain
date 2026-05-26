@@ -20,6 +20,12 @@ candidates, or own product projections. Mezzanine holds the rendered prompt
 handoff as a `Mezzanine.AIExecution.RenderResult` and passes only refs and
 hashes to Jido Integration.
 
+Context packet construction validates ref schemes before canonical hashing:
+tenant refs, user request refs, system instruction refs, memory refs, budget
+refs, model class refs, route policy refs, and trace refs must use their
+accepted scheme families. Invalid schemes fail before the packet hash is
+claimed.
+
 Raw prompts and raw memory bodies must not cross product, authority, workflow,
 or model-runtime boundaries. Use artifact refs, payload refs, packet hashes,
 trace refs, and bounded failure reason codes.

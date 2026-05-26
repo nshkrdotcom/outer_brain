@@ -103,6 +103,13 @@ metering, eval-runner support, adaptive artifact identity, optimization
 artifact graph history, semantic persistence posture, authority evidence
 projection, and cleanup of env/regex/atom hazards.
 
+The NSHKR cleanup pass tightened `outer_brain_context_abi` ref validation.
+Context packets now validate tenant, request, system instruction, memory,
+budget, model class, route policy, and trace refs by scheme before canonical
+hashing. Renderer output remains ref-only: Mezzanine carries the resulting
+prompt artifact ref, provider payload ref, and payload hash into Jido
+Integration without exposing raw prompt or provider-native bodies.
+
 The Synapse governed-effect lift does not make OuterBrain a runtime or
 connector owner. The staged-live diagnostic lane is deterministic operational
 work, so it runs through AppKit, Mezzanine, Citadel, Jido Integration,

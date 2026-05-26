@@ -16,6 +16,8 @@ OuterBrain changes must keep these obligations green:
 
 - restart-durability and semantic-session tests;
 - prompt/context redaction and provenance tests;
+- Context ABI ref-scheme fixtures for tenant, request, system instruction,
+  memory, budget, model class, route policy, and trace refs;
 - StackLab `examples/outer_brain_restart_durability` and session-lineage proof
   coverage when semantic replay behavior changes;
 - no Regex usage in touched code/tests;
