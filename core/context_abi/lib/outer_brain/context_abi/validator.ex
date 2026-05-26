@@ -63,6 +63,14 @@ defmodule OuterBrain.ContextABI.Validator do
     end
   end
 
+  @spec required_ref(map(), atom(), [String.t()]) :: {:ok, String.t()} | {:error, Failure.t()}
+  def required_ref(attrs, field, allowed_prefixes) do
+    with {:ok, value} <- required_string(attrs, field),
+         :ok <- validate_ref_scheme(value, field, allowed_prefixes) do
+      {:ok, value}
+    end
+  end
+
   @spec string_list(map(), atom()) :: {:ok, [String.t()]} | {:error, Failure.t()}
   def string_list(attrs, field) do
     case fetch(attrs, field, []) do
@@ -75,6 +83,24 @@ defmodule OuterBrain.ContextABI.Validator do
 
       _other ->
         invalid_field(field)
+    end
+  end
+
+  @spec string_ref_list(map(), atom(), [String.t()]) ::
+          {:ok, [String.t()]} | {:error, Failure.t()}
+  def string_ref_list(attrs, field, allowed_prefixes) do
+    with {:ok, values} <- string_list(attrs, field) do
+      values
+      |> Enum.reduce_while(:ok, fn value, :ok ->
+        case validate_ref_scheme(value, field, allowed_prefixes) do
+          :ok -> {:cont, :ok}
+          error -> {:halt, error}
+        end
+      end)
+      |> case do
+        :ok -> {:ok, values}
+        error -> error
+      end
     end
   end
 
@@ -137,6 +163,17 @@ defmodule OuterBrain.ContextABI.Validator do
 
   defp invalid_enum(reason_code) do
     failure(:outer_brain, reason_code, safe_message: "context vocabulary value is invalid")
+  end
+
+  defp validate_ref_scheme(value, field, allowed_prefixes) do
+    if Enum.any?(allowed_prefixes, &String.starts_with?(value, &1)) do
+      :ok
+    else
+      failure(:outer_brain, "outer_brain.context.invalid_ref_scheme.v1",
+        safe_message: "context ref uses an invalid scheme",
+        evidence_refs: ["field://#{Atom.to_string(field)}", "ref://#{value}"]
+      )
+    end
   end
 
   defp find_raw_key(%{__struct__: _} = value), do: value |> Map.from_struct() |> find_raw_key()

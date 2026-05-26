@@ -44,17 +44,31 @@ defmodule OuterBrain.ContextABI.ContextPacket do
 
   def new(attrs) when is_map(attrs) do
     with :ok <- Validator.reject_raw_payload(attrs),
-         {:ok, tenant_ref} <- Validator.required_string(attrs, :tenant_ref),
-         {:ok, user_request_ref} <- Validator.required_string(attrs, :user_request_ref),
+         {:ok, tenant_ref} <- Validator.required_ref(attrs, :tenant_ref, ["tenant://"]),
+         {:ok, user_request_ref} <-
+           Validator.required_ref(attrs, :user_request_ref, [
+             "artifact://",
+             "user-request://",
+             "request://"
+           ]),
          {:ok, system_instruction_ref} <-
-           Validator.required_string(attrs, :system_instruction_ref),
-         {:ok, memory_refs} <- Validator.string_list(attrs, :memory_refs),
+           Validator.required_ref(attrs, :system_instruction_ref, [
+             "artifact://",
+             "system-instruction://"
+           ]),
+         {:ok, memory_refs} <-
+           Validator.string_ref_list(attrs, :memory_refs, ["memory://", "memory-candidate://"]),
          :ok <- reject_unpromoted_memory_refs(memory_refs),
-         {:ok, budget_ref} <- Validator.required_string(attrs, :budget_ref),
-         {:ok, model_class_allowlist} <- Validator.string_list(attrs, :model_class_allowlist),
+         {:ok, budget_ref} <- Validator.required_ref(attrs, :budget_ref, ["budget://"]),
+         {:ok, model_class_allowlist} <-
+           Validator.string_ref_list(attrs, :model_class_allowlist, [
+             "model-class://",
+             "class://"
+           ]),
          :ok <- require_nonempty(model_class_allowlist, :model_class_allowlist),
-         {:ok, route_policy_ref} <- Validator.required_string(attrs, :route_policy_ref),
-         {:ok, trace_ref} <- Validator.required_string(attrs, :trace_ref),
+         {:ok, route_policy_ref} <-
+           Validator.required_ref(attrs, :route_policy_ref, ["route-policy://"]),
+         {:ok, trace_ref} <- Validator.required_ref(attrs, :trace_ref, ["trace://"]),
          {:ok, extension_refs} <- Validator.optional_map(attrs, :extension_refs) do
       hash_input = %{
         schema_ref: Validator.fetch(attrs, :schema_ref, @schema_ref),

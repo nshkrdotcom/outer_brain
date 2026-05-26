@@ -61,6 +61,16 @@ defmodule OuterBrain.ContextABITest do
     assert nested_failure.reason_code == "outer_brain.context.raw_payload_rejected.v1"
   end
 
+  test "compiler rejects invalid context ref schemes" do
+    assert {:error, %Failure{} = failure} =
+             compile_request()
+             |> Map.put(:tenant_ref, "not-a-tenant-ref")
+             |> ContextABI.compile()
+
+    assert failure.reason_code == "outer_brain.context.invalid_ref_scheme.v1"
+    assert "field://tenant_ref" in failure.evidence_refs
+  end
+
   test "compiler rejects unpromoted memory candidate refs in production packets" do
     assert {:error, %Failure{} = failure} =
              compile_request()
