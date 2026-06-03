@@ -289,3 +289,24 @@ Operational rules:
   Mezzanine-owned Temporal workflow only when a cross-repo proof requires it.
 - Evidence is emitted through semantic journal tests, restart-durability
   receipts, quality/provenance refs, StackLab proofs, and AITrace events.
+
+## Chassis Evolution: Failure-Batch & Codebase Recall
+
+OuterBrain participates in Chassis Evolution by supplying context refs,
+memory refs, codebase recall refs, vector-hit refs, and bounded summaries to
+`chassis_failure_batches` and to the prompt-building path used by
+`chassis_coding_agent_runner`. It helps Chassis explain why a failure batch is
+worth a candidate and which prior semantic facts may help the coding agent,
+without moving semantic memory ownership into Chassis.
+
+OuterBrain returns refs and bounded summaries, not raw bodies. Chassis stores
+recall refs, redacted summaries, digest refs, and evidence refs in its
+receipts; raw private semantic memory remains below OuterBrain's own lease and
+redaction boundaries.
+
+## Product-Safe DTO Posture
+
+The rule is: no raw private bodies in product DTOs. The only legal posture values are
+`:default`, `:strict`, and `:lower_read_lease`. A raw body path requires a
+Citadel lower-read lease ref and must still be represented as an explicit,
+bounded lower-read flow rather than as a default Chassis or AppKit projection.
