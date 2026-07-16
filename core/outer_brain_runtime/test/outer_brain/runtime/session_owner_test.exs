@@ -14,17 +14,27 @@ defmodule OuterBrain.Runtime.SessionOwnerTest do
     now = DateTime.from_unix!(1_800_000_500)
 
     assert {:ok, :acquired, lease} =
-             SessionOwner.acquire(registry, "session_alpha", "node_a", 1, now,
+             SessionOwner.acquire_with_store(
+               registry,
+               "session_alpha",
+               "node_a",
+               1,
+               now,
+               __MODULE__.FakeLeaseStore,
                tenant_id: "tenant://runtime/a",
-               ttl_seconds: 30,
-               lease_store: __MODULE__.FakeLeaseStore
+               ttl_seconds: 30
              )
 
     assert {:error, {:held_by_other, fence}} =
-             SessionOwner.acquire(registry, "session_alpha", "node_b", 1, now,
+             SessionOwner.acquire_with_store(
+               registry,
+               "session_alpha",
+               "node_b",
+               1,
+               now,
+               __MODULE__.FakeLeaseStore,
                tenant_id: "tenant://runtime/a",
-               ttl_seconds: 30,
-               lease_store: __MODULE__.FakeLeaseStore
+               ttl_seconds: 30
              )
 
     assert fence.epoch == 1
@@ -33,7 +43,7 @@ defmodule OuterBrain.Runtime.SessionOwnerTest do
     assert lease.epoch == 1
 
     assert lease.persistence_posture.persistence_profile_ref ==
-             "persistence-profile://mickey-mouse"
+             "persistence-profile://outer-brain-durable-redacted"
   end
 
   test "stale owners can be replaced only after expiry and with a newer epoch", %{
@@ -42,26 +52,41 @@ defmodule OuterBrain.Runtime.SessionOwnerTest do
     now = DateTime.from_unix!(1_800_000_500)
 
     assert {:ok, :acquired, _lease} =
-             SessionOwner.acquire(registry, "session_alpha", "node_a", 1, now,
+             SessionOwner.acquire_with_store(
+               registry,
+               "session_alpha",
+               "node_a",
+               1,
+               now,
+               __MODULE__.FakeLeaseStore,
                tenant_id: "tenant://runtime/a",
-               ttl_seconds: 1,
-               lease_store: __MODULE__.FakeLeaseStore
+               ttl_seconds: 1
              )
 
     later = DateTime.add(now, 5, :second)
 
     assert {:error, {:stale_epoch, _fence}} =
-             SessionOwner.acquire(registry, "session_alpha", "node_b", 1, later,
+             SessionOwner.acquire_with_store(
+               registry,
+               "session_alpha",
+               "node_b",
+               1,
+               later,
+               __MODULE__.FakeLeaseStore,
                tenant_id: "tenant://runtime/a",
-               ttl_seconds: 30,
-               lease_store: __MODULE__.FakeLeaseStore
+               ttl_seconds: 30
              )
 
     assert {:ok, :acquired, replacement} =
-             SessionOwner.acquire(registry, "session_alpha", "node_b", 2, later,
+             SessionOwner.acquire_with_store(
+               registry,
+               "session_alpha",
+               "node_b",
+               2,
+               later,
+               __MODULE__.FakeLeaseStore,
                tenant_id: "tenant://runtime/a",
-               ttl_seconds: 30,
-               lease_store: __MODULE__.FakeLeaseStore
+               ttl_seconds: 30
              )
 
     assert LeaseRegistry.current_fence(registry, "session_alpha").holder == "node_b"
@@ -167,7 +192,7 @@ defmodule OuterBrain.Runtime.SessionOwnerTest do
     assert {:ok, :acquired, ^lease} = __MODULE__.FakeLeaseStore.acquire_lease(lease, now, [])
 
     assert {:ok, ^lease, :canonical} =
-             LeaseRegistry.reload_from_canonical(
+             LeaseRegistry.reload_from_store(
                registry,
                __MODULE__.FakeLeaseStore,
                "tenant://runtime/a",

@@ -3,34 +3,64 @@ defmodule OuterBrain.Persistence.StoreBoundaryTest do
 
   alias OuterBrain.Contracts.ReplyBodyBoundary
   alias OuterBrain.Journal.Tables.ReplyPublicationRecord
-  alias OuterBrain.Persistence.Application, as: PersistenceApplication
-  alias OuterBrain.Persistence.ProfilePolicy
+  alias OuterBrain.Persistence.{Application, Bootstrap, DurableSupervisor, ProfilePolicy, Repo}
   alias OuterBrain.Persistence.ReplyPublicationMapper
 
   @tenant "tenant://outer-brain/boundary"
 
-  test "application supervision is selected by explicit boot args" do
-    assert [] = PersistenceApplication.children([])
-    assert [] = PersistenceApplication.children(enabled: false)
-    assert [OuterBrain.Persistence.Repo] = PersistenceApplication.children(enabled: true)
-
-    repo_child = {OuterBrain.Persistence.Repo, pool_size: 1}
-    assert [^repo_child] = PersistenceApplication.children(enabled: true, repo_child: repo_child)
+  defmodule ExplodingRepo do
+    def query(_statement, _params), do: raise("postgres://user:secret@database.example/db")
   end
 
-  test "profile policy treats false and nil options explicitly" do
-    assert {:error, {:missing_migration_proof, :outer_brain_persistence}} =
-             ProfilePolicy.preflight(%{
-               :profile => :integration_postgres,
-               :migration_proof => false,
-               "migration_proof" => :present
-             })
+  test "production composition cannot select an empty or memory repository" do
+    assert_raise ArgumentError, fn -> Application.children([]) end
+    assert_raise ArgumentError, fn -> Application.children(profile: :mickey_mouse) end
+    assert_raise ArgumentError, fn -> DurableSupervisor.start_link(profile: :off) end
 
-    assert {:error, {:missing_migration_proof, :outer_brain_persistence}} =
-             ProfilePolicy.preflight(%{profile: :integration_postgres, migration_proof: nil})
+    assert [
+             {Repo, [pool_size: 1]},
+             {Bootstrap, [profile: :durable_redacted, repo: Repo]}
+           ] =
+             Application.children(
+               profile: :durable_redacted,
+               repo_options: [pool_size: 1]
+             )
+
+    assert [{Bootstrap, [profile: :durable_redacted, repo: Repo]}] =
+             Application.children(
+               profile: :durable_redacted,
+               repo_mode: :external
+             )
+
+    assert_raise ArgumentError, fn ->
+      Application.children(profile: :durable_redacted, repo_mode: :disabled)
+    end
+  end
+
+  test "profile policy requires the one durable production profile" do
+    assert {:error, {:unsupported_persistence_tier, :outer_brain_persistence, _missing}} =
+             ProfilePolicy.preflight(%{})
 
     assert {:error, {:unsupported_persistence_tier, :outer_brain_persistence, false}} =
              ProfilePolicy.preflight(%{profile: false})
+
+    assert {:error, {:unsupported_persistence_tier, :outer_brain_persistence, :memory_debug}} =
+             ProfilePolicy.preflight(%{profile: :memory_debug})
+
+    assert {:error, {:repository_not_running, NotRunningRepo}} =
+             ProfilePolicy.preflight(%{profile: :durable_redacted, repo: NotRunningRepo})
+  end
+
+  test "repository preflight errors never expose connection or credential material" do
+    child_spec = %{
+      id: ExplodingRepo,
+      start: {Agent, :start_link, [fn -> nil end, [name: ExplodingRepo]]}
+    }
+
+    start_supervised!(child_spec)
+
+    assert {:error, {:repository_preflight_failed, RuntimeError}} =
+             ProfilePolicy.preflight(profile: :durable_redacted, repo: ExplodingRepo)
   end
 
   test "reply publication mapper owns schema attributes without mutating domain record" do

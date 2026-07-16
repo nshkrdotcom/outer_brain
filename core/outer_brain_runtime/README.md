@@ -14,10 +14,10 @@ callers can reload from the canonical persistence store before acting.
 The registry emits telemetry for lease acquire, renew, expire, and release
 events under `[:outer_brain, :runtime, :lease_registry, event]`.
 
-Phase 7 runtime leases, fences, session owners, and stream-state helpers carry
-memory-default persistence posture. The posture is evidence only: debug tap
-failure is non-mutating, and publication or semantic-session state transitions
-do not depend on durable storage being available.
+`OuterBrain.Runtime.SessionOwner.acquire/6` always acquires through the
+canonical PostgreSQL store and carries `:durable_redacted` posture. The
+test-only `acquire_with_store/7` seam accepts fixture modules that exist only in
+the test build. No production API selects a memory or no-op lease store.
 
 ## Persistence Documentation
 

@@ -2,8 +2,10 @@ defmodule OuterBrain.Persistence.StoreTest do
   use ExUnit.Case, async: false
 
   alias Ecto.Adapters.SQL.Sandbox
+  alias GroundPlane.Contracts.ArtifactDescriptor
   alias OuterBrain.Contracts.Lease
   alias OuterBrain.Contracts.ReplyBodyBoundary
+  alias OuterBrain.Contracts.SemanticContextProvenance
 
   alias OuterBrain.Journal.Tables.{
     RecoveryTaskRecord,
@@ -18,26 +20,17 @@ defmodule OuterBrain.Persistence.StoreTest do
   @tenant_a "tenant://outer-brain/a"
   @tenant_b "tenant://outer-brain/b"
 
-  test "memory preflight is non-mutating by default" do
-    assert :ok = Store.preflight([])
-    assert :ok = Store.preflight(profile: :mickey_mouse)
-    assert :ok = Store.preflight(profile: :memory_debug)
-  end
-
-  test "postgres preflight fails before mutation when migration proof is missing" do
-    assert {:error, {:missing_migration_proof, :outer_brain_persistence}} =
-             Store.preflight(profile: :integration_postgres)
-  end
-
-  test "postgres preflight passes when migration proof is present" do
-    assert :ok =
-             Store.preflight(profile: :integration_postgres, migration_proof: :present)
+  defmodule TemporaryRepo do
+    use Ecto.Repo,
+      otp_app: :outer_brain_persistence,
+      adapter: Ecto.Adapters.Postgres
   end
 
   setup_all do
     container = PostgresContainer.start!("outer_brain_persistence")
 
-    {:ok, _pid} = Repo.start_link(PostgresContainer.repo_config(container.port))
+    repo_config = PostgresContainer.repo_config(container.port)
+    {:ok, _pid} = Repo.start_link(repo_config)
 
     PostgresContainer.run_migrations!(Repo)
     Sandbox.mode(Repo, :manual)
@@ -47,12 +40,164 @@ defmodule OuterBrain.Persistence.StoreTest do
       PostgresContainer.stop!(container)
     end)
 
-    {:ok, repo: Repo}
+    {:ok, repo: Repo, repo_config: repo_config}
   end
 
   setup %{repo: repo} do
     :ok = Sandbox.checkout(repo)
     :ok
+  end
+
+  test "durable preflight verifies the running repository and migrated schema", %{repo: repo} do
+    assert :ok = Store.preflight(profile: :durable_redacted, repo: repo)
+  end
+
+  test "pre-start health uses a temporary Repo and leaves no process behind", %{
+    repo_config: repo_config
+  } do
+    assert Process.whereis(TemporaryRepo) == nil
+
+    assert :ok =
+             Store.preflight(
+               profile: :durable_redacted,
+               repo: TemporaryRepo,
+               repo_mode: :temporary,
+               repo_options: repo_config
+             )
+
+    assert Process.whereis(TemporaryRepo) == nil
+  end
+
+  test "semantic provenance and its immutable object reference are transactionally durable", %{
+    repo: repo
+  } do
+    provenance = semantic_context!("semantic-ref://context/alpha", "context-alpha")
+    descriptor = artifact_descriptor!("artifact-ref://context/alpha")
+
+    assert {:ok, ^provenance} =
+             Store.record_semantic_context(provenance, descriptor,
+               tenant_id: @tenant_a,
+               repo: repo
+             )
+
+    assert {:ok, %{provenance: fetched, artifact_descriptor: fetched_descriptor}} =
+             Store.fetch_semantic_context(@tenant_a, provenance.semantic_ref, repo: repo)
+
+    assert fetched == provenance
+    assert fetched_descriptor == descriptor
+
+    assert [%{provenance: indexed, artifact_descriptor: indexed_descriptor}] =
+             Store.search_semantic_contexts(@tenant_a, "provider-openai model-gpt artifact-ref",
+               repo: repo
+             )
+
+    assert indexed.semantic_ref == provenance.semantic_ref
+    assert indexed_descriptor.artifact_ref == descriptor.artifact_ref
+    assert [] = Store.search_semantic_contexts(@tenant_b, "provider-openai", repo: repo)
+
+    assert {:ok, ^descriptor} =
+             Store.fetch_artifact_descriptor(@tenant_a, descriptor.artifact_ref, repo: repo)
+
+    assert :error =
+             Store.fetch_artifact_descriptor(@tenant_b, descriptor.artifact_ref, repo: repo)
+  end
+
+  test "semantic provenance replays are exact and conflicting reuse fails closed", %{repo: repo} do
+    provenance = semantic_context!("semantic-ref://context/replay", "context-replay")
+    descriptor = artifact_descriptor!("artifact-ref://context/replay")
+
+    assert {:ok, ^provenance} =
+             Store.record_semantic_context(provenance, descriptor,
+               tenant_id: @tenant_a,
+               repo: repo
+             )
+
+    assert {:ok, ^provenance} =
+             Store.record_semantic_context(provenance, descriptor,
+               tenant_id: @tenant_a,
+               repo: repo
+             )
+
+    conflicting = %{descriptor | content_digest: "sha256:" <> String.duplicate("f", 64)}
+
+    assert {:error, {:artifact_descriptor_conflict, "artifact-ref://context/replay"}} =
+             Store.record_semantic_context(provenance, conflicting,
+               tenant_id: @tenant_a,
+               repo: repo
+             )
+  end
+
+  test "artifact descriptor rows reject mutation at the database boundary", %{repo: repo} do
+    provenance =
+      semantic_context!("semantic-ref://context/artifact-immutable", "artifact-immutable")
+
+    descriptor = artifact_descriptor!("artifact-ref://context/artifact-immutable")
+
+    assert {:ok, ^provenance} =
+             Store.record_semantic_context(provenance, descriptor,
+               tenant_id: @tenant_a,
+               repo: repo
+             )
+
+    assert_raise Postgrex.Error, ~r/artifact descriptors are immutable/, fn ->
+      repo.query!(
+        "UPDATE outer_brain_artifact_descriptors SET owner_ref = 'owner-ref://other' WHERE artifact_ref = $1",
+        [descriptor.artifact_ref]
+      )
+    end
+  end
+
+  test "semantic provenance rows reject mutation at the database boundary", %{repo: repo} do
+    provenance =
+      semantic_context!("semantic-ref://context/provenance-immutable", "provenance-immutable")
+
+    descriptor = artifact_descriptor!("artifact-ref://context/provenance-immutable")
+
+    assert {:ok, ^provenance} =
+             Store.record_semantic_context(provenance, descriptor,
+               tenant_id: @tenant_a,
+               repo: repo
+             )
+
+    assert_raise Postgrex.Error, ~r/semantic context provenance is immutable/, fn ->
+      repo.query!(
+        "UPDATE outer_brain_semantic_contexts SET provider_ref = 'provider-ref://other' WHERE semantic_ref = $1",
+        [provenance.semantic_ref]
+      )
+    end
+  end
+
+  test "secret-bearing artifact metadata is rejected before insertion", %{repo: repo} do
+    provenance = semantic_context!("semantic-ref://context/secret", "context-secret")
+
+    descriptor =
+      "artifact-ref://context/secret"
+      |> artifact_descriptor!()
+      |> Map.put(:provenance, %{"api_key" => "must-not-persist"})
+
+    assert {:error, {:raw_credential_key_forbidden, "api_key"}} =
+             Store.record_semantic_context(provenance, descriptor,
+               tenant_id: @tenant_a,
+               repo: repo
+             )
+
+    assert :error =
+             Store.fetch_artifact_descriptor(@tenant_a, descriptor.artifact_ref, repo: repo)
+  end
+
+  test "signed object URLs are rejected in favor of opaque location refs", %{repo: repo} do
+    provenance = semantic_context!("semantic-ref://context/signed-url", "context-signed-url")
+
+    descriptor =
+      "artifact-ref://context/signed-url"
+      |> artifact_descriptor!()
+      |> Map.put(:location_ref, "https://objects.example/context?X-Amz-Signature=secret")
+
+    assert {:error, :non_opaque_artifact_location_ref} =
+             Store.record_semantic_context(provenance, descriptor,
+               tenant_id: @tenant_a,
+               repo: repo
+             )
   end
 
   test "lease acquisition persists fenced session ownership and expiry replacement", %{repo: repo} do
@@ -133,6 +278,23 @@ defmodule OuterBrain.Persistence.StoreTest do
     assert persisted_second.entry_type == second.entry_type
     assert persisted_second.payload == second.payload
     assert DateTime.compare(persisted_second.recorded_at, second.recorded_at) == :eq
+  end
+
+  test "raw and credential-shaped semantic journal payloads fail before insertion", %{repo: repo} do
+    entry =
+      journal_entry!(
+        "entry_forbidden_payload",
+        "session_alpha",
+        "causal_1",
+        "wake_input",
+        DateTime.from_unix!(1_800_000_100),
+        %{"nested" => %{"raw_provider_payload" => "must-not-persist"}}
+      )
+
+    assert {:error, {:forbidden_journal_payload_key, "raw_provider_payload"}} =
+             Store.append_semantic_journal_entry(entry, tenant_id: @tenant_a, repo: repo)
+
+    assert [] = Store.journal_entries(@tenant_a, "session_alpha", repo: repo)
   end
 
   test "restart-authority inputs survive durable recovery task and publication writes", %{
@@ -297,6 +459,57 @@ defmodule OuterBrain.Persistence.StoreTest do
       })
 
     publication
+  end
+
+  defp semantic_context!(semantic_ref, suffix) do
+    {:ok, provenance} =
+      SemanticContextProvenance.new(%{
+        tenant_ref: @tenant_a,
+        installation_ref: "installation-ref://#{suffix}",
+        workspace_ref: "workspace-ref://#{suffix}",
+        project_ref: "project-ref://#{suffix}",
+        environment_ref: "environment-ref://#{suffix}",
+        resource_ref: "resource-ref://#{suffix}",
+        authority_packet_ref: "authority-packet-ref://#{suffix}",
+        permission_decision_ref: "permission-decision-ref://#{suffix}",
+        idempotency_key: "idempotency-key://#{suffix}",
+        trace_id: "trace-id://#{suffix}",
+        correlation_id: "correlation-id://#{suffix}",
+        release_manifest_ref: "release-manifest-ref://#{suffix}",
+        system_actor_ref: "system-actor-ref://outer-brain",
+        semantic_ref: semantic_ref,
+        provider_ref: "provider-openai",
+        model_ref: "model-gpt",
+        prompt_hash: "sha256:" <> String.duplicate("1", 64),
+        context_hash: "sha256:" <> String.duplicate("2", 64),
+        input_claim_check_ref: "claim-check-ref://#{suffix}/input",
+        output_claim_check_ref: "claim-check-ref://#{suffix}/output",
+        provenance_refs: ["provenance-ref://#{suffix}"],
+        normalizer_version: "normalizer-v1",
+        redaction_policy_ref: "redaction-policy-ref://v1"
+      })
+
+    provenance
+  end
+
+  defp artifact_descriptor!(artifact_ref) do
+    ArtifactDescriptor.new!(%{
+      artifact_ref: artifact_ref,
+      tenant_ref: @tenant_a,
+      owner_ref: "owner-ref://outer-brain",
+      content_digest: "sha256:" <> String.duplicate("0", 64),
+      size_bytes: 128,
+      media_type: "application/vnd.outer-brain.semantic-context+json",
+      schema_ref: "schema-ref://outer-brain/semantic-context/v1",
+      schema_version: 1,
+      classification: "confidential",
+      provenance: %{"normalizer_ref" => "normalizer-ref://v1"},
+      causal_parent_refs: ["causal-parent-ref://wake/1"],
+      producing_operation_ref: "operation-ref://semantic-context/1",
+      retention: %{"policy_ref" => "retention-policy-ref://semantic-context"},
+      deletion_state: "active",
+      location_ref: "object-ref://outer-brain/semantic-context/1"
+    })
   end
 
   defp stop_repo_safely do

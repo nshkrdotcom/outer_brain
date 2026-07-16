@@ -1,102 +1,72 @@
-# OuterBrain Outer Brain Persistence Persistence
+# OuterBrain Persistence
 
-## Scope
+## Production contract
 
-OuterBrain Outer Brain Persistence owns raw Ecto/Postgres durability layer for semantic-session, journal, recovery, and publication truth. This document is package-local and is the persistence contract for `core/outer_brain_persistence` in `outer_brain`.
+`core/outer_brain_persistence` owns PostgreSQL truth for semantic-session
+leases, journal entries, recovery tasks, reply publications, artifact
+descriptors, and semantic-context provenance. The sole production profile is
+`:durable_redacted`; missing, disabled, memory, and unknown profiles fail before
+a repository child is selected.
 
-## Available Tiers
-
-- `:mickey_mouse`: memory or ref-only default. No restart durability claim.
-- `:memory_debug`: memory or ref-only with redacted debug evidence only.
-- `:local_restart_safe`: supported only when this package or a named adapter package owns a local durable store and preflight proof.
-- `:integration_postgres`: supported only when a named Postgres or AshPostgres adapter and migration proof are configured.
-- `:ops_durable`: supported only for Temporal-owning runtime packages after explicit substrate proof.
-- `:full_debug_tracked`: supported only when durable storage and redacted debug capture are both explicitly preflighted.
-
-## Default Tier
-
-The default tier is `:mickey_mouse`. It is memory-only or ref-only and is lost on restart unless this package explicitly states that a local durable adapter has been selected by the caller.
-
-## Capture Levels
-
-Supported capture levels are `:off`, `:metadata`, `:refs_only`, `:redacted_debug`, and `:full_debug` when the package explicitly supports full debug. Raw credentials, auth headers, token files, credential bodies, raw prompt bodies, raw provider payload bodies, native auth file content, private keys, session cookies, refresh tokens, access tokens, database URLs with credentials, and object-store signed URLs are always forbidden.
-
-## Supported Adapters
-
-Explicit Ecto/Postgres durable adapter. Not required for default semantic runtime execution.
-
-## Unsupported Adapters
-
-Unsupported adapter selections fail before mutation. Silent fallback from durable selection to memory is invalid. Product code must not import lower store modules directly to compensate for a missing adapter.
-
-## Configuration Precedence
-
-Configuration is explicit caller data first, package option second, release profile third, and built-in default last. Governed flows do not read process environment, local credential files, provider defaults, singleton clients, or application configuration as authority unless this package names a standalone boot boundary.
-
-## OTP Ownership And Repo Configuration
-
-`OuterBrain.Persistence.Application` is inert by default and does not read app env to start or configure Postgres. Hosts that need durable storage own the supervision decision by starting `OuterBrain.Persistence.Repo` with explicit config in their own supervision tree. Tests may start the repo directly with container-derived config.
-
-This keeps durability opt-in visible at the caller boundary: no code path can silently enable Postgres persistence through global app configuration, and `OuterBrain.Persistence.Repo` receives the config that its caller supplied.
-
-## Test Container Readiness
-
-Dockerized Postgres test support uses a bounded readiness awaiter with explicit
-timeout and interval options. A readiness failure raises with the last probe's
-exit status and output, then removes the temporary container before returning
-control to the test process.
-
-## Example Config
+Production hosts add this child to their supervision tree:
 
 ```elixir
-# Default deterministic profile.
-[persistence_profile: :mickey_mouse]
-
-# Redacted in-memory debug profile.
-[persistence_profile: :memory_debug, capture_level: :redacted_debug]
-
-# Durable opt-in example. The caller must also pass adapter capability and preflight proof.
-[persistence_profile: :integration_postgres]
+{OuterBrain.Persistence.DurableSupervisor,
+ profile: :durable_redacted,
+ repo_options: [url: database_url]}
 ```
 
-## Test Commands
+Hosts that start all repositories in an earlier supervision layer use
+`repo_mode: :external`. That mode omits the Repo child and requires the
+canonical Repo to be running before Bootstrap starts. A host can validate the
+same database before starting its Repo layer by using a bounded temporary Repo:
+
+```elixir
+OuterBrain.Persistence.Store.preflight(
+  profile: :durable_redacted,
+  repo_mode: :temporary,
+  repo_options: [url: database_url]
+)
+```
+
+The supervisor starts `OuterBrain.Persistence.Repo` and then performs a live
+preflight. Boot fails if the Repo is unavailable, a required table is absent,
+or a package migration is pending. Preflight errors expose only safe error
+classes, never connection strings or driver exception messages. A running host
+may perform the same health check with:
+
+```elixir
+OuterBrain.Persistence.Store.preflight(
+  profile: :durable_redacted,
+  repo: OuterBrain.Persistence.Repo
+)
+```
+
+## Semantic context and artifact boundaries
+
+`Store.record_semantic_context/3` atomically records an immutable,
+secret-free `GroundPlane.Contracts.ArtifactDescriptor` and the matching
+`OuterBrain.Contracts.SemanticContextProvenance`. Exact replays are idempotent;
+reuse of an artifact, semantic, or idempotency reference with different facts
+fails closed. Tenant scope is required on every write and read.
+
+The semantic index contains only opaque semantic, provider, model, artifact,
+and provenance refs. Raw prompts, provider bodies, signed object-store URLs,
+credentials, and credential-shaped metadata are forbidden. Object locations
+remain opaque owner-authorized refs.
+
+## Test boundary
+
+Tests may start the canonical Repo directly against the isolated Docker
+PostgreSQL fixture. That is a deterministic proof path, not a production
+selector. There is no production memory, no-op, disabled, or fixture Repo.
+
+Focused QC:
 
 ```bash
-cd core/outer_brain_persistence && mix test; root mix ci
+cd core/outer_brain_persistence
+mix compile --warnings-as-errors
+mix test test/outer_brain/persistence/store_boundary_test.exs \
+  test/outer_brain/persistence/store_test.exs \
+  test/outer_brain/persistence/semantic_failure_store_test.exs
 ```
-
-## Lost-On-Restart Claims
-
-`:mickey_mouse` and `:memory_debug` data is lost on BEAM or process restart unless the package explicitly says a local durable adapter was selected. Memory profiles may prove semantics, validation, and receipt shape; they do not prove restart durability.
-
-## Valid Durability Claims
-
-Valid durability claims require explicit profile selection, adapter capability, migration or substrate preflight, redacted evidence, focused tests, repo QC, and a pushed commit. :integration_postgres after migration and repository preflight.
-
-## Invalid Durability Claims
-
-Invalid claims include ambient provider credentials, default database reachability, default Temporal reachability, object-store availability without opt-in, network reachability, raw debug capture, raw prompt capture, raw provider payload capture, and product direct lower-store imports.
-
-## Debug Sidecar Behavior
-
-Debug sidecars are disabled by default. When enabled, they are read-only or append-only redacted evidence surfaces. Debug failure must be non-mutating and must not alter authority, lease, run, workflow, store, projection, or product state.
-
-## Redaction Guarantees
-
-Evidence stores opaque refs, stable redacted ids, hashes, bounded metadata, claim-check refs, capture tags, receipt refs, store refs without credentials, and partition refs without secrets. Raw secret and raw payload fields are rejected before persistence or export.
-
-## Migration And Preflight Behavior
-
-Package migrations own semantic_session_leases, semantic_journal_entries, recovery_tasks, and reply_publications.
-
-## Phase 12 Migration And Preflight Closeout
-
-- Tier: `:integration_postgres`.
-- Schema owner: `OuterBrain.Persistence.Repo`.
-- Migration owner: `core/outer_brain_persistence/priv/repo/migrations`.
-- Migration command: run `Ecto.Migrator.run(OuterBrain.Persistence.Repo, OuterBrain.Persistence.PostgresContainer.migrations_path(), :up, all: true)` against the configured repo, or the equivalent release-owned migration command for `OuterBrain.Persistence.Repo`.
-- Migration preflight command: `OuterBrain.Persistence.Store.preflight(profile: :integration_postgres, migration_proof: :present)`.
-- Failure behavior: missing migration proof returns `{:error, {:missing_migration_proof, :outer_brain_persistence}}` before semantic-session, journal, recovery, or publication mutation.
-- Rollback behavior: rollback is an operator-owned database migration action against the same repo and migration path; restart durability claims remain open until post-rollback focused tests are recorded.
-- Tagged test command: `cd core/outer_brain_persistence && mix test test/outer_brain/persistence/store_test.exs`.
-- Release claim boundary: durable OuterBrain truth is valid only after migration proof, focused package tests, root QC, static scans, and pushed commit evidence are recorded.

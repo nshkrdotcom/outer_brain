@@ -129,6 +129,16 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
     assert String.starts_with?(right_entry.entry_id, "semantic_failure_journal:v1:")
   end
 
+  test "semantic failure provenance cannot bypass journal redaction", %{repo: repo} do
+    failure =
+      semantic_failure!(provenance: [%{"nested" => %{"access_token" => "must-not-persist"}}])
+
+    assert {:error, {:forbidden_journal_payload_key, "access_token"}} =
+             Store.record_semantic_failure(failure, repo: repo)
+
+    assert [] = Store.semantic_failure_entries(@tenant, "session-semantic-1", repo: repo)
+  end
+
   test "reply publications are idempotent by dedupe key across restart replay", %{repo: repo} do
     first =
       reply_publication!(

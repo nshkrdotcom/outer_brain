@@ -11,9 +11,30 @@ defmodule OuterBrain.Runtime.SessionOwner do
           {:ok, :acquired | :renewed, Lease.t()} | {:error, term()}
   def acquire(registry, session_id, holder, epoch, now, opts \\ [])
       when is_binary(session_id) and is_binary(holder) and is_integer(epoch) and epoch >= 0 do
+    do_acquire(registry, session_id, holder, epoch, now, PersistenceStore, opts)
+  end
+
+  if Mix.env() == :test do
+    @doc false
+    @spec acquire_with_store(
+            Agent.agent(),
+            String.t(),
+            String.t(),
+            non_neg_integer(),
+            DateTime.t(),
+            module(),
+            keyword()
+          ) :: {:ok, :acquired | :renewed, Lease.t()} | {:error, term()}
+    def acquire_with_store(registry, session_id, holder, epoch, now, lease_store, opts) do
+      do_acquire(registry, session_id, holder, epoch, now, lease_store, opts)
+    end
+  end
+
+  defp do_acquire(registry, session_id, holder, epoch, now, lease_store, opts)
+       when is_binary(session_id) and is_binary(holder) and is_integer(epoch) and epoch >= 0 and
+              is_atom(lease_store) do
     ttl_seconds = Keyword.get(opts, :ttl_seconds, 30)
     lease_id = Keyword.get(opts, :lease_id, "#{holder}:#{session_id}:#{epoch}")
-    lease_store = Keyword.get(opts, :lease_store, PersistenceStore)
     tenant_id = Keyword.fetch!(opts, :tenant_id)
 
     lease_store_opts =
@@ -26,7 +47,7 @@ defmodule OuterBrain.Runtime.SessionOwner do
              lease_id: lease_id,
              epoch: epoch,
              expires_at: DateTime.add(now, ttl_seconds, :second),
-             persistence_profile: Keyword.get(opts, :persistence_profile),
+             persistence_profile: :durable_redacted,
              persistence_posture: Keyword.get(opts, :persistence_posture)
            }),
          {:ok, status, persisted_lease} <- lease_store.acquire_lease(lease, now, lease_store_opts) do

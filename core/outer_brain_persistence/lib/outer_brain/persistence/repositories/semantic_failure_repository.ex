@@ -4,6 +4,7 @@ defmodule OuterBrain.Persistence.SemanticFailureRepository do
   import Ecto.Query
 
   alias OuterBrain.Contracts.SemanticFailure
+  alias OuterBrain.Persistence.JournalPayloadPolicy
   alias OuterBrain.Persistence.Schemas.SemanticJournalEntry
   alias OuterBrain.Persistence.SemanticFailureMapper
 
@@ -14,24 +15,26 @@ defmodule OuterBrain.Persistence.SemanticFailureRepository do
   def record(repo, %SemanticFailure{} = failure, %DateTime{} = recorded_at) do
     payload = SemanticFailure.to_payload(failure)
 
-    changeset =
-      SemanticJournalEntry.changeset(%SemanticJournalEntry{}, %{
-        entry_id: SemanticFailure.journal_entry_id(failure),
-        tenant_id: failure.tenant_id,
-        session_id: failure.semantic_session_id,
-        causal_unit_id: failure.causal_unit_id,
-        entry_type: @semantic_failure_entry_type,
-        payload: payload,
-        recorded_at: recorded_at
-      })
+    with :ok <- JournalPayloadPolicy.validate(payload) do
+      changeset =
+        SemanticJournalEntry.changeset(%SemanticJournalEntry{}, %{
+          entry_id: SemanticFailure.journal_entry_id(failure),
+          tenant_id: failure.tenant_id,
+          session_id: failure.semantic_session_id,
+          causal_unit_id: failure.causal_unit_id,
+          entry_type: @semantic_failure_entry_type,
+          payload: payload,
+          recorded_at: recorded_at
+        })
 
-    case repo.insert(changeset,
-           on_conflict: [set: [payload: payload, recorded_at: recorded_at]],
-           conflict_target: :entry_id,
-           returning: true
-         ) do
-      {:ok, schema} -> SemanticFailure.from_payload(schema.payload)
-      {:error, changeset} -> {:error, changeset}
+      case repo.insert(changeset,
+             on_conflict: [set: [payload: payload, recorded_at: recorded_at]],
+             conflict_target: :entry_id,
+             returning: true
+           ) do
+        {:ok, schema} -> SemanticFailure.from_payload(schema.payload)
+        {:error, changeset} -> {:error, changeset}
+      end
     end
   end
 

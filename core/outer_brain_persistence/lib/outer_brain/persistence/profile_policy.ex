@@ -3,23 +3,45 @@ defmodule OuterBrain.Persistence.ProfilePolicy do
   Persistence profile selection and preflight policy.
   """
 
-  alias OuterBrain.Persistence.OptionAccess
-
-  @supported_memory_profiles [:mickey_mouse, :memory_debug, :off]
+  alias OuterBrain.Persistence.{OptionAccess, Repo, SchemaPreflight}
 
   @spec preflight(keyword() | map()) :: :ok | {:error, term()}
   def preflight(opts \\ []) do
     attrs = OptionAccess.to_map(opts)
 
-    case selected_profile(attrs) do
-      profile when profile in @supported_memory_profiles ->
+    with :ok <- validate_durable_profile(attrs) do
+      preflight_repo(attrs)
+    end
+  end
+
+  @spec require_durable_profile(keyword() | map()) :: :ok | no_return()
+  def require_durable_profile(opts) when is_list(opts) do
+    opts |> OptionAccess.to_map() |> require_durable_profile()
+  end
+
+  def require_durable_profile(opts) when is_map(opts) do
+    case validate_durable_profile(opts) do
+      :ok ->
         :ok
 
-      :integration_postgres ->
-        require_migration_proof(attrs)
+      {:error, {:unsupported_persistence_tier, :outer_brain_persistence, profile}} ->
+        raise ArgumentError,
+              "outer_brain production persistence requires :durable_redacted, got: #{inspect(profile)}"
+    end
+  end
 
-      other ->
-        {:error, {:unsupported_persistence_tier, :outer_brain_persistence, other}}
+  @spec validate_durable_profile(keyword() | map()) :: :ok | {:error, term()}
+  def validate_durable_profile(opts) when is_list(opts) do
+    opts |> OptionAccess.to_map() |> validate_durable_profile()
+  end
+
+  def validate_durable_profile(opts) when is_map(opts) do
+    case selected_profile(opts) do
+      :durable_redacted ->
+        :ok
+
+      profile ->
+        {:error, {:unsupported_persistence_tier, :outer_brain_persistence, profile}}
     end
   end
 
@@ -31,7 +53,7 @@ defmodule OuterBrain.Persistence.ProfilePolicy do
     profile =
       case OptionAccess.value(attrs, :profile, missing) do
         ^missing ->
-          OptionAccess.value(attrs, :persistence_profile, :mickey_mouse)
+          OptionAccess.value(attrs, :persistence_profile, missing)
 
         value ->
           value
@@ -40,18 +62,41 @@ defmodule OuterBrain.Persistence.ProfilePolicy do
     normalize_profile(profile)
   end
 
-  defp normalize_profile("mickey_mouse"), do: :mickey_mouse
-  defp normalize_profile("memory_debug"), do: :memory_debug
-  defp normalize_profile("off"), do: :off
-  defp normalize_profile("integration_postgres"), do: :integration_postgres
+  defp normalize_profile("durable_redacted"), do: :durable_redacted
   defp normalize_profile(profile), do: profile
 
-  defp require_migration_proof(attrs) do
-    case OptionAccess.value(attrs, :migration_proof, OptionAccess.missing()) do
-      :present -> :ok
-      true -> :ok
-      paths when is_list(paths) and paths != [] -> :ok
-      _missing_or_false -> {:error, {:missing_migration_proof, :outer_brain_persistence}}
+  defp preflight_repo(attrs) do
+    repo = OptionAccess.value(attrs, :repo, Repo)
+
+    case OptionAccess.value(attrs, :repo_mode, :running) do
+      mode when mode in [:running, :owned, :external] -> SchemaPreflight.check(repo)
+      :temporary -> temporary_preflight(repo, OptionAccess.value(attrs, :repo_options, []))
+      mode -> {:error, {:unsupported_repo_preflight_mode, mode}}
     end
   end
+
+  defp temporary_preflight(repo, repo_options) when is_list(repo_options) do
+    case Process.whereis(repo) do
+      pid when is_pid(pid) ->
+        SchemaPreflight.check(repo)
+
+      nil ->
+        case repo.start_link(repo_options) do
+          {:ok, pid} ->
+            try do
+              SchemaPreflight.check(repo)
+            after
+              GenServer.stop(pid)
+            end
+
+          {:error, _reason} ->
+            {:error, :repository_unavailable}
+        end
+    end
+  catch
+    :exit, _reason -> {:error, :repository_unavailable}
+  end
+
+  defp temporary_preflight(_repo, _repo_options),
+    do: {:error, {:invalid_repo_options, :outer_brain_persistence}}
 end

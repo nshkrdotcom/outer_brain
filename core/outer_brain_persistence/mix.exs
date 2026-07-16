@@ -1,5 +1,11 @@
+unless Code.ensure_loaded?(DependencySources) do
+  Code.require_file("../../build_support/dependency_sources.exs", __DIR__)
+end
+
 defmodule OuterBrain.Persistence.MixProject do
   use Mix.Project
+
+  @repo_root Path.expand("../..", __DIR__)
 
   def project do
     [
@@ -17,7 +23,6 @@ defmodule OuterBrain.Persistence.MixProject do
 
   def application do
     [
-      mod: {OuterBrain.Persistence.Application, []},
       extra_applications: [:logger, :ecto_sql]
     ]
   end
@@ -31,6 +36,7 @@ defmodule OuterBrain.Persistence.MixProject do
       {:ecto_sql, "~> 3.13"},
       {:postgrex, "~> 0.22"},
       {:jason, "~> 1.4"},
+      DependencySources.dep(:ground_plane_contracts, @repo_root),
       {:outer_brain_contracts, path: "../outer_brain_contracts"},
       {:outer_brain_journal, path: "../outer_brain_journal"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

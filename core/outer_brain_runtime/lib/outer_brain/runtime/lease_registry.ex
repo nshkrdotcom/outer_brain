@@ -51,16 +51,24 @@ defmodule OuterBrain.Runtime.LeaseRegistry do
     GenServer.call(registry, {:mirror, lease})
   end
 
-  @spec reload_from_canonical(registry(), module(), String.t(), String.t(), keyword()) ::
+  @spec reload_from_canonical(registry(), String.t(), String.t(), keyword()) ::
           {:ok, Lease.t(), :canonical} | {:error, term()} | :error
-  def reload_from_canonical(
-        registry,
-        lease_store \\ PersistenceStore,
-        tenant_id,
-        session_id,
-        opts \\ []
-      )
+  def reload_from_canonical(registry, tenant_id, session_id, opts \\ [])
       when is_binary(tenant_id) and is_binary(session_id) do
+    do_reload_from_store(registry, PersistenceStore, tenant_id, session_id, opts)
+  end
+
+  if Mix.env() == :test do
+    @doc false
+    @spec reload_from_store(registry(), module(), String.t(), String.t(), keyword()) ::
+            {:ok, Lease.t(), :canonical} | {:error, term()} | :error
+    def reload_from_store(registry, lease_store, tenant_id, session_id, opts \\ []) do
+      do_reload_from_store(registry, lease_store, tenant_id, session_id, opts)
+    end
+  end
+
+  defp do_reload_from_store(registry, lease_store, tenant_id, session_id, opts)
+       when is_atom(lease_store) and is_binary(tenant_id) and is_binary(session_id) do
     lease_store_opts =
       opts |> Keyword.get(:lease_store_opts, []) |> Keyword.put_new(:tenant_id, tenant_id)
 

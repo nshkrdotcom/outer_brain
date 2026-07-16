@@ -1,94 +1,23 @@
-# OuterBrain Outer Brain Runtime Persistence
+# OuterBrain Runtime Persistence
 
-## Scope
+OuterBrain runtime owns live session processes and a supervised hot lease
+mirror. PostgreSQL truth remains in `outer_brain_persistence`.
 
-OuterBrain Outer Brain Runtime owns OuterBrain semantic, memory, authority, runtime, or restart persistence evidence owner. This document is package-local and is the persistence contract for `core/outer_brain_runtime` in `outer_brain`.
+Production `SessionOwner.acquire/6` always writes the canonical persistence
+store with `:durable_redacted` posture before updating the mirror. It exposes
+no memory, disabled, no-op, or alternate-store option. Deterministic tests use
+`acquire_with_store/7` with fixture modules compiled under `test/`; those
+fixtures do not exist in production releases.
 
-## Available Tiers
+`LeaseRegistry.current_fence_with_posture/3` distinguishes `:mirror_fresh`,
+`:mirror_stale`, and `:missing`. Stale reads fail closed. Call
+`LeaseRegistry.reload_from_canonical/4` to repopulate the mirror from
+PostgreSQL, then re-read the fence. The registry emits acquire, renew, expire,
+and release telemetry under
+`[:outer_brain, :runtime, :lease_registry, event]`.
 
-- `:mickey_mouse`: memory or ref-only default. No restart durability claim.
-- `:memory_debug`: memory or ref-only with redacted debug evidence only.
-- `:local_restart_safe`: supported only when this package or a named adapter package owns a local durable store and preflight proof.
-- `:integration_postgres`: supported only when a named Postgres or AshPostgres adapter and migration proof are configured.
-- `:ops_durable`: supported only for Temporal-owning runtime packages after explicit substrate proof.
-- `:full_debug_tracked`: supported only when durable storage and redacted debug capture are both explicitly preflighted.
-
-## Default Tier
-
-The default tier is `:mickey_mouse`. It is memory-only or ref-only and is lost on restart unless this package explicitly states that a local durable adapter has been selected by the caller.
-
-## Capture Levels
-
-Supported capture levels are `:off`, `:metadata`, `:refs_only`, `:redacted_debug`, and `:full_debug` when the package explicitly supports full debug. Raw credentials, auth headers, token files, credential bodies, raw prompt bodies, raw provider payload bodies, native auth file content, private keys, session cookies, refresh tokens, access tokens, database URLs with credentials, and object-store signed URLs are always forbidden.
-
-## Supported Adapters
-
-Memory/ref-only semantic evidence by default.
-
-## Lease Registry Lifecycle
-
-`OuterBrain.Runtime.LeaseRegistry` is a supervised runtime mirror for active
-semantic-session ownership. It is not the canonical lease store; canonical
-lease truth remains in `outer_brain_persistence`.
-
-Mirror reads that can affect ownership must use
-`current_fence_with_posture/3`. The return posture is `:mirror_fresh`,
-`:mirror_stale`, or `:missing`; stale mirror reads fail closed. A caller that
-needs to continue after a stale or missing mirror must reload from canonical
-storage with `reload_from_canonical/5` and then re-read the mirror.
-
-The registry exposes explicit `expire/3` and `release/3` operations so
-ownership removal is visible and emits telemetry. Lifecycle telemetry events
-are emitted under `[:outer_brain, :runtime, :lease_registry, event]` for
-`:acquire`, `:renew`, `:expire`, and `:release`.
-
-## Unsupported Adapters
-
-Unsupported adapter selections fail before mutation. Silent fallback from durable selection to memory is invalid. Product code must not import lower store modules directly to compensate for a missing adapter.
-
-## Configuration Precedence
-
-Configuration is explicit caller data first, package option second, release profile third, and built-in default last. Governed flows do not read process environment, local credential files, provider defaults, singleton clients, or application configuration as authority unless this package names a standalone boot boundary.
-
-## Example Config
-
-```elixir
-# Default deterministic profile.
-[persistence_profile: :mickey_mouse]
-
-# Redacted in-memory debug profile.
-[persistence_profile: :memory_debug, capture_level: :redacted_debug]
-
-# Durable opt-in example. The caller must also pass adapter capability and preflight proof.
-[persistence_profile: :integration_postgres]
-```
-
-## Test Commands
-
-```bash
-cd core/outer_brain_runtime && mix test; root mix ci
-```
-
-## Lost-On-Restart Claims
-
-`:mickey_mouse` and `:memory_debug` data is lost on BEAM or process restart unless the package explicitly says a local durable adapter was selected. Memory profiles may prove semantics, validation, and receipt shape; they do not prove restart durability.
-
-## Valid Durability Claims
-
-Valid durability claims require explicit profile selection, adapter capability, migration or substrate preflight, redacted evidence, focused tests, repo QC, and a pushed commit. Durable refs may be carried as redacted evidence when outer_brain_persistence owns the backing rows.
-
-## Invalid Durability Claims
-
-Invalid claims include ambient provider credentials, default database reachability, default Temporal reachability, object-store availability without opt-in, network reachability, raw debug capture, raw prompt capture, raw provider payload capture, and product direct lower-store imports.
-
-## Debug Sidecar Behavior
-
-Debug sidecars are disabled by default. When enabled, they are read-only or append-only redacted evidence surfaces. Debug failure must be non-mutating and must not alter authority, lease, run, workflow, store, projection, or product state.
-
-## Redaction Guarantees
-
-Evidence stores opaque refs, stable redacted ids, hashes, bounded metadata, claim-check refs, capture tags, receipt refs, store refs without credentials, and partition refs without secrets. Raw secret and raw payload fields are rejected before persistence or export.
-
-## Migration And Preflight Behavior
-
-No raw durable schema ownership in this package.
+The production host must supervise
+`OuterBrain.Persistence.DurableSupervisor` before starting runtime consumers.
+That child fails boot unless the canonical Repo and every required migration
+are present. Raw prompts, provider payloads, credentials, and signed object
+locations never belong in lease or mirror state.

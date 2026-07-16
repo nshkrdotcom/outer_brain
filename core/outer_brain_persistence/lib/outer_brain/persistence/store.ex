@@ -7,7 +7,8 @@ defmodule OuterBrain.Persistence.Store do
   `OuterBrain.Persistence`.
   """
 
-  alias OuterBrain.Contracts.{Lease, SemanticFailure}
+  alias GroundPlane.Contracts.ArtifactDescriptor
+  alias OuterBrain.Contracts.{Lease, SemanticContextProvenance, SemanticFailure}
 
   alias OuterBrain.Journal.Tables.{
     RecoveryTaskRecord,
@@ -16,17 +17,83 @@ defmodule OuterBrain.Persistence.Store do
   }
 
   alias OuterBrain.Persistence.{
+    ArtifactDescriptorRepository,
     JournalRepository,
     LeaseRepository,
     ProfilePolicy,
     RecoveryTaskRepository,
     ReplyPublicationRepository,
+    SemanticContextRepository,
     SemanticFailureRepository,
     TenantOptions
   }
 
   @spec preflight(keyword() | map()) :: :ok | {:error, term()}
   def preflight(opts \\ []), do: ProfilePolicy.preflight(opts)
+
+  @doc """
+  Atomically records immutable artifact metadata and the semantic provenance
+  fact that refers to it.
+  """
+  @spec record_semantic_context(
+          SemanticContextProvenance.t(),
+          ArtifactDescriptor.t(),
+          keyword()
+        ) :: {:ok, SemanticContextProvenance.t()} | {:error, term()}
+  def record_semantic_context(
+        %SemanticContextProvenance{} = provenance,
+        %ArtifactDescriptor{} = descriptor,
+        opts \\ []
+      ) do
+    repo = TenantOptions.repo(opts)
+    tenant_ref = TenantOptions.tenant_id!(opts)
+
+    case repo.transaction(fn ->
+           with {:ok, _descriptor} <-
+                  ArtifactDescriptorRepository.record(repo, tenant_ref, descriptor),
+                {:ok, provenance} <-
+                  SemanticContextRepository.record(
+                    repo,
+                    tenant_ref,
+                    provenance,
+                    descriptor.artifact_ref
+                  ) do
+             provenance
+           else
+             {:error, reason} -> repo.rollback(reason)
+           end
+         end) do
+      {:ok, provenance} -> {:ok, provenance}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @spec fetch_semantic_context(String.t(), String.t(), keyword()) ::
+          {:ok, SemanticContextRepository.record()} | :error
+  def fetch_semantic_context(tenant_ref, semantic_ref, opts \\ [])
+      when is_binary(tenant_ref) and is_binary(semantic_ref) do
+    opts
+    |> TenantOptions.repo()
+    |> SemanticContextRepository.fetch(tenant_ref, semantic_ref)
+  end
+
+  @spec search_semantic_contexts(String.t(), String.t(), keyword()) ::
+          [SemanticContextRepository.record()]
+  def search_semantic_contexts(tenant_ref, query, opts \\ [])
+      when is_binary(tenant_ref) and is_binary(query) do
+    opts
+    |> TenantOptions.repo()
+    |> SemanticContextRepository.search(tenant_ref, query, Keyword.get(opts, :limit, 20))
+  end
+
+  @spec fetch_artifact_descriptor(String.t(), String.t(), keyword()) ::
+          {:ok, ArtifactDescriptor.t()} | :error
+  def fetch_artifact_descriptor(tenant_ref, artifact_ref, opts \\ [])
+      when is_binary(tenant_ref) and is_binary(artifact_ref) do
+    opts
+    |> TenantOptions.repo()
+    |> ArtifactDescriptorRepository.fetch(tenant_ref, artifact_ref)
+  end
 
   @spec acquire_lease(Lease.t(), DateTime.t(), keyword()) ::
           {:ok, :acquired | :renewed, Lease.t()} | {:error, term()}
@@ -45,7 +112,7 @@ defmodule OuterBrain.Persistence.Store do
   end
 
   @spec append_semantic_journal_entry(SemanticJournalEntryRecord.t(), keyword()) ::
-          {:ok, SemanticJournalEntryRecord.t()} | {:error, Ecto.Changeset.t()}
+          {:ok, SemanticJournalEntryRecord.t()} | {:error, Ecto.Changeset.t() | term()}
   def append_semantic_journal_entry(%SemanticJournalEntryRecord{} = entry, opts \\ []) do
     opts
     |> TenantOptions.repo()

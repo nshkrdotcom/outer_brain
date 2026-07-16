@@ -4,26 +4,28 @@ defmodule OuterBrain.Persistence.JournalRepository do
   import Ecto.Query
 
   alias OuterBrain.Journal.Tables.SemanticJournalEntryRecord
-  alias OuterBrain.Persistence.JournalMapper
+  alias OuterBrain.Persistence.{JournalMapper, JournalPayloadPolicy}
   alias OuterBrain.Persistence.Schemas.SemanticJournalEntry
 
   @spec append(module(), String.t(), SemanticJournalEntryRecord.t()) ::
-          {:ok, SemanticJournalEntryRecord.t()} | {:error, Ecto.Changeset.t()}
+          {:ok, SemanticJournalEntryRecord.t()} | {:error, Ecto.Changeset.t() | term()}
   def append(repo, tenant_id, %SemanticJournalEntryRecord{} = entry) do
-    %SemanticJournalEntry{}
-    |> SemanticJournalEntry.changeset(%{
-      entry_id: entry.entry_id,
-      tenant_id: tenant_id,
-      session_id: entry.session_id,
-      causal_unit_id: entry.causal_unit_id,
-      entry_type: entry.entry_type,
-      payload: entry.payload,
-      recorded_at: entry.recorded_at
-    })
-    |> repo.insert()
-    |> case do
-      {:ok, _schema} -> {:ok, entry}
-      {:error, changeset} -> {:error, changeset}
+    with :ok <- JournalPayloadPolicy.validate(entry.payload) do
+      %SemanticJournalEntry{}
+      |> SemanticJournalEntry.changeset(%{
+        entry_id: entry.entry_id,
+        tenant_id: tenant_id,
+        session_id: entry.session_id,
+        causal_unit_id: entry.causal_unit_id,
+        entry_type: entry.entry_type,
+        payload: entry.payload,
+        recorded_at: entry.recorded_at
+      })
+      |> repo.insert()
+      |> case do
+        {:ok, _schema} -> {:ok, entry}
+        {:error, changeset} -> {:error, changeset}
+      end
     end
   end
 
