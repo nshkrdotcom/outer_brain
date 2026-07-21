@@ -4,14 +4,17 @@ defmodule OuterBrain.Persistence.SemanticContextMapper do
   alias GroundPlane.Boundary.Codec
   alias OuterBrain.Contracts.SemanticContextProvenance
 
-  @spec to_schema_attrs(SemanticContextProvenance.t(), String.t()) :: map()
-  def to_schema_attrs(%SemanticContextProvenance{} = provenance, artifact_ref) do
-    attrs = SemanticContextProvenance.to_map(provenance)
+  @spec to_schema_attrs(SemanticContextProvenance.t(), map()) :: map()
+  def to_schema_attrs(%SemanticContextProvenance{} = provenance, lineage) do
+    provenance_attrs = SemanticContextProvenance.to_map(provenance)
+    attrs = Map.merge(provenance_attrs, lineage)
 
     attrs
-    |> Map.put(:artifact_ref, artifact_ref)
-    |> Map.put(:provenance_digest, Codec.digest(attrs))
-    |> Map.put(:search_document, search_document(provenance, artifact_ref))
+    |> Map.put(
+      :provenance_digest,
+      Codec.digest(%{provenance: provenance_attrs, lineage: lineage})
+    )
+    |> Map.put(:search_document, search_document(provenance, lineage))
   end
 
   @spec from_schema(struct()) :: SemanticContextProvenance.t()
@@ -47,12 +50,28 @@ defmodule OuterBrain.Persistence.SemanticContextMapper do
     provenance
   end
 
-  defp search_document(provenance, artifact_ref) do
+  @spec lineage_from_schema(struct()) :: map()
+  def lineage_from_schema(schema) do
+    %{
+      run_ref: schema.run_ref,
+      turn_ref: schema.turn_ref,
+      context_artifact_ref: schema.context_artifact_ref,
+      prompt_artifact_ref: schema.prompt_artifact_ref,
+      model_profile_ref: schema.model_profile_ref,
+      memory_snapshot_refs: schema.memory_snapshot_refs,
+      previous_semantic_ref: schema.previous_semantic_ref
+    }
+  end
+
+  defp search_document(provenance, lineage) do
     [
       provenance.semantic_ref,
       provenance.provider_ref,
       provenance.model_ref,
-      artifact_ref
+      lineage.context_artifact_ref,
+      lineage.prompt_artifact_ref,
+      lineage.run_ref,
+      lineage.turn_ref
       | provenance.provenance_refs
     ]
     |> Enum.join(" ")

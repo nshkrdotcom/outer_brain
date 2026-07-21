@@ -3,8 +3,8 @@
 ## Production contract
 
 `core/outer_brain_persistence` owns PostgreSQL truth for semantic-session
-leases, journal entries, recovery tasks, reply publications, artifact
-descriptors, and semantic-context provenance. The sole production profile is
+leases, journal entries, recovery tasks, reply publications, immutable artifact
+descriptors/payloads, and semantic-context provenance. The sole production profile is
 `:durable_redacted`; missing, disabled, memory, and unknown profiles fail before
 a repository child is selected.
 
@@ -44,16 +44,22 @@ OuterBrain.Persistence.Store.preflight(
 
 ## Semantic context and artifact boundaries
 
-`Store.record_semantic_context/3` atomically records an immutable,
-secret-free `GroundPlane.Contracts.ArtifactDescriptor` and the matching
-`OuterBrain.Contracts.SemanticContextProvenance`. Exact replays are idempotent;
-reuse of an artifact, semantic, or idempotency reference with different facts
-fails closed. Tenant scope is required on every write and read.
+`Store.record_prompt_context/2` atomically records the content-addressed context
+and prompt-manifest payloads, their secret-free descriptors, and matching
+semantic provenance/lineage. `Store.publish_reply_continuation/2` atomically
+records the normalized final reply, next context revision, publication, and a
+safe journal fact. Exact replays are idempotent; reuse of an artifact, semantic,
+publication, or idempotency reference with different facts fails closed. Tenant
+scope is required on every write and read.
+
+`Store.resolve_artifact_payload/3` requires exact tenant, reader, operation,
+and authority-packet agreement. Artifact references are not bearer authority.
 
 The semantic index contains only opaque semantic, provider, model, artifact,
-and provenance refs. Raw prompts, provider bodies, signed object-store URLs,
-credentials, and credential-shaped metadata are forbidden. Object locations
-remain opaque owner-authorized refs.
+run, turn, and provenance refs. Provider-native bodies, private reasoning,
+credentials, signed object-store URLs, and credential-shaped metadata are
+forbidden. Payloads are immutable and accessible only through the owner API;
+locations remain opaque owner-authorized refs.
 
 ## Test boundary
 

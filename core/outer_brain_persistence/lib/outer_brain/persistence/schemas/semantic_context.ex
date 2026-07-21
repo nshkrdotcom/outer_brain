@@ -31,20 +31,28 @@ defmodule OuterBrain.Persistence.Schemas.SemanticContext do
     field(:provenance_refs, {:array, :string})
     field(:normalizer_version, :string)
     field(:redaction_policy_ref, :string)
-    field(:artifact_ref, :string)
+    field(:run_ref, :string)
+    field(:turn_ref, :string)
+    field(:context_artifact_ref, :string)
+    field(:prompt_artifact_ref, :string)
+    field(:model_profile_ref, :string)
+    field(:memory_snapshot_refs, {:array, :string})
+    field(:previous_semantic_ref, :string)
     field(:provenance_digest, :string)
     field(:search_document, :string)
 
     timestamps(type: :utc_datetime_usec, updated_at: false)
   end
 
-  @optional_fields [:principal_ref, :system_actor_ref]
+  @optional_fields [:principal_ref, :system_actor_ref, :previous_semantic_ref]
   @fields ~w(
     semantic_ref tenant_ref installation_ref workspace_ref project_ref environment_ref
     resource_ref authority_packet_ref permission_decision_ref idempotency_key trace_id
     correlation_id release_manifest_ref principal_ref system_actor_ref provider_ref model_ref
     prompt_hash context_hash input_claim_check_ref output_claim_check_ref provenance_refs
-    normalizer_version redaction_policy_ref artifact_ref provenance_digest search_document
+    normalizer_version redaction_policy_ref run_ref turn_ref context_artifact_ref
+    prompt_artifact_ref model_profile_ref memory_snapshot_refs previous_semantic_ref
+    provenance_digest search_document
   )a
 
   def changeset(schema, attrs) do

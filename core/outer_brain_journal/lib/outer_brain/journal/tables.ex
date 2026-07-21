@@ -246,6 +246,11 @@ defmodule OuterBrain.Journal.Tables do
       :dedupe_key,
       :body,
       :body_ref,
+      :run_ref,
+      :turn_ref,
+      :attempt_ref,
+      :reply_artifact_ref,
+      :next_semantic_ref,
       persistence_posture: PersistencePosture.memory(:publication_state)
     ]
 
@@ -257,6 +262,11 @@ defmodule OuterBrain.Journal.Tables do
             dedupe_key: String.t(),
             body: String.t(),
             body_ref: ReplyBodyBoundary.body_ref(),
+            run_ref: String.t() | nil,
+            turn_ref: String.t() | nil,
+            attempt_ref: String.t() | nil,
+            reply_artifact_ref: String.t() | nil,
+            next_semantic_ref: String.t() | nil,
             persistence_posture: PersistencePosture.t()
           }
 
@@ -286,6 +296,11 @@ defmodule OuterBrain.Journal.Tables do
            dedupe_key: dedupe_key,
            body: body,
            body_ref: body_ref,
+           run_ref: Map.get(attrs, :run_ref),
+           turn_ref: Map.get(attrs, :turn_ref),
+           attempt_ref: Map.get(attrs, :attempt_ref),
+           reply_artifact_ref: Map.get(attrs, :reply_artifact_ref),
+           next_semantic_ref: Map.get(attrs, :next_semantic_ref),
            persistence_posture: PersistencePosture.resolve(:publication_state, attrs)
          }}
       else

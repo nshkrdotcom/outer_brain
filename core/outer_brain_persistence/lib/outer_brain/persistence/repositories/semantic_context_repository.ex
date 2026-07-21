@@ -5,23 +5,25 @@ defmodule OuterBrain.Persistence.SemanticContextRepository do
 
   alias GroundPlane.Boundary.Codec
   alias OuterBrain.Contracts.SemanticContextProvenance
-  alias OuterBrain.Persistence.ArtifactDescriptorMapper
-  alias OuterBrain.Persistence.Schemas.{ArtifactDescriptor, SemanticContext}
-  alias OuterBrain.Persistence.SemanticContextMapper
+  alias OuterBrain.Persistence.{ArtifactDescriptorRepository, SemanticContextMapper}
+  alias OuterBrain.Persistence.Schemas.SemanticContext
 
   @type record :: %{
           provenance: SemanticContextProvenance.t(),
-          artifact_descriptor: GroundPlane.Contracts.ArtifactDescriptor.t()
+          context_artifact_descriptor: GroundPlane.Contracts.ArtifactDescriptor.t(),
+          prompt_artifact_descriptor: GroundPlane.Contracts.ArtifactDescriptor.t(),
+          lineage: map()
         }
 
-  @spec record(module(), String.t(), SemanticContextProvenance.t(), String.t()) ::
+  @spec record(module(), String.t(), SemanticContextProvenance.t(), map()) ::
           {:ok, SemanticContextProvenance.t()} | {:error, term()}
-  def record(repo, tenant_ref, %SemanticContextProvenance{} = provenance, artifact_ref) do
+  def record(repo, tenant_ref, %SemanticContextProvenance{} = provenance, lineage) do
     with :ok <- require_tenant(tenant_ref, provenance),
-         :ok <- validate_provenance_refs(provenance.provenance_refs) do
+         :ok <- validate_provenance_refs(provenance.provenance_refs),
+         {:ok, lineage} <- validate_lineage(lineage, provenance) do
       case fetch_schema(repo, tenant_ref, provenance.semantic_ref, lock: true) do
-        nil -> insert(repo, provenance, artifact_ref)
-        schema -> verify_idempotent(schema, provenance, artifact_ref)
+        nil -> insert(repo, provenance, lineage)
+        schema -> verify_idempotent(schema, provenance, lineage)
       end
     end
   end
@@ -29,18 +31,12 @@ defmodule OuterBrain.Persistence.SemanticContextRepository do
   @spec fetch(module(), String.t(), String.t()) :: {:ok, record()} | :error
   def fetch(repo, tenant_ref, semantic_ref) do
     SemanticContext
-    |> join(:inner, [context], artifact in ArtifactDescriptor,
-      on:
-        artifact.tenant_ref == context.tenant_ref and
-          artifact.artifact_ref == context.artifact_ref
-    )
     |> where(
-      [context, _artifact],
+      [context],
       context.tenant_ref == ^tenant_ref and context.semantic_ref == ^semantic_ref
     )
-    |> select([context, artifact], {context, artifact})
     |> repo.one()
-    |> map_pair()
+    |> map_record(repo, tenant_ref)
   end
 
   @spec search(module(), String.t(), String.t(), pos_integer()) :: [record()]
@@ -52,26 +48,20 @@ defmodule OuterBrain.Persistence.SemanticContextRepository do
       []
     else
       SemanticContext
-      |> join(:inner, [context], artifact in ArtifactDescriptor,
-        on:
-          artifact.tenant_ref == context.tenant_ref and
-            artifact.artifact_ref == context.artifact_ref
-      )
-      |> where([context, _artifact], context.tenant_ref == ^tenant_ref)
+      |> where([context], context.tenant_ref == ^tenant_ref)
       |> where(
-        [context, _artifact],
+        [context],
         fragment(
           "to_tsvector('simple', ?) @@ websearch_to_tsquery('simple', ?)",
           context.search_document,
           ^normalized_query
         )
       )
-      |> order_by([context, _artifact], desc: context.inserted_at, asc: context.semantic_ref)
+      |> order_by([context], desc: context.inserted_at, asc: context.semantic_ref)
       |> limit(^min(limit, 100))
-      |> select([context, artifact], {context, artifact})
       |> repo.all()
-      |> Enum.map(fn pair ->
-        {:ok, record} = map_pair(pair)
+      |> Enum.map(fn context ->
+        {:ok, record} = map_record(context, repo, tenant_ref)
         record
       end)
     end
@@ -89,9 +79,9 @@ defmodule OuterBrain.Persistence.SemanticContextRepository do
     repo.one(query)
   end
 
-  defp insert(repo, provenance, artifact_ref) do
+  defp insert(repo, provenance, lineage) do
     %SemanticContext{}
-    |> SemanticContext.changeset(SemanticContextMapper.to_schema_attrs(provenance, artifact_ref))
+    |> SemanticContext.changeset(SemanticContextMapper.to_schema_attrs(provenance, lineage))
     |> repo.insert()
     |> case do
       {:ok, _schema} -> {:ok, provenance}
@@ -99,24 +89,37 @@ defmodule OuterBrain.Persistence.SemanticContextRepository do
     end
   end
 
-  defp verify_idempotent(schema, provenance, artifact_ref) do
-    expected_digest = provenance |> SemanticContextProvenance.to_map() |> Codec.digest()
+  defp verify_idempotent(schema, provenance, lineage) do
+    expected_digest =
+      Codec.digest(%{
+        provenance: SemanticContextProvenance.to_map(provenance),
+        lineage: lineage
+      })
 
-    if schema.provenance_digest == expected_digest and schema.artifact_ref == artifact_ref do
+    if schema.provenance_digest == expected_digest do
       {:ok, SemanticContextMapper.from_schema(schema)}
     else
       {:error, {:semantic_context_conflict, provenance.semantic_ref}}
     end
   end
 
-  defp map_pair(nil), do: :error
+  defp map_record(nil, _repo, _tenant_ref), do: :error
 
-  defp map_pair({context, artifact}) do
-    {:ok,
-     %{
-       provenance: SemanticContextMapper.from_schema(context),
-       artifact_descriptor: ArtifactDescriptorMapper.from_schema(artifact)
-     }}
+  defp map_record(context, repo, tenant_ref) do
+    with {:ok, context_descriptor} <-
+           ArtifactDescriptorRepository.fetch(repo, tenant_ref, context.context_artifact_ref),
+         {:ok, prompt_descriptor} <-
+           ArtifactDescriptorRepository.fetch(repo, tenant_ref, context.prompt_artifact_ref) do
+      {:ok,
+       %{
+         provenance: SemanticContextMapper.from_schema(context),
+         context_artifact_descriptor: context_descriptor,
+         prompt_artifact_descriptor: prompt_descriptor,
+         lineage: SemanticContextMapper.lineage_from_schema(context)
+       }}
+    else
+      :error -> :error
+    end
   end
 
   defp require_tenant(tenant_ref, %SemanticContextProvenance{tenant_ref: tenant_ref}), do: :ok
@@ -134,4 +137,35 @@ defmodule OuterBrain.Persistence.SemanticContextRepository do
   end
 
   defp validate_provenance_refs(_refs), do: {:error, :invalid_semantic_provenance_refs}
+
+  defp validate_lineage(lineage, provenance) when is_map(lineage) do
+    required = ~w(
+      run_ref turn_ref context_artifact_ref prompt_artifact_ref model_profile_ref
+      memory_snapshot_refs
+    )a
+
+    missing =
+      Enum.find(required, fn field ->
+        value = Map.get(lineage, field)
+        if field == :memory_snapshot_refs, do: not is_list(value), else: not present?(value)
+      end)
+
+    cond do
+      missing ->
+        {:error, {:invalid_semantic_lineage, missing}}
+
+      provenance.resource_ref != lineage.turn_ref ->
+        {:error, :semantic_turn_ref_mismatch}
+
+      provenance.context_hash == provenance.prompt_hash ->
+        {:error, :context_prompt_artifacts_not_distinct}
+
+      true ->
+        {:ok, Map.take(lineage, required ++ [:previous_semantic_ref])}
+    end
+  end
+
+  defp validate_lineage(_lineage, _provenance), do: {:error, :invalid_semantic_lineage}
+
+  defp present?(value), do: is_binary(value) and value != ""
 end

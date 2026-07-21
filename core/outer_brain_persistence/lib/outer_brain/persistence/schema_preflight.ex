@@ -8,6 +8,7 @@ defmodule OuterBrain.Persistence.SchemaPreflight do
     recovery_tasks
     reply_publications
     outer_brain_artifact_descriptors
+    outer_brain_artifact_payloads
     outer_brain_semantic_contexts
   )
   @required_indexes ~w(
@@ -15,6 +16,8 @@ defmodule OuterBrain.Persistence.SchemaPreflight do
   )
   @required_triggers ~w(
     outer_brain_artifact_descriptors_immutable
+    outer_brain_artifact_payloads_immutable
+    outer_brain_reply_publications_immutable
     outer_brain_semantic_contexts_immutable
   )
 

@@ -2,9 +2,7 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
   use ExUnit.Case, async: false
 
   alias Ecto.Adapters.SQL.Sandbox
-  alias OuterBrain.Contracts.ReplyBodyBoundary
   alias OuterBrain.Contracts.SemanticFailure
-  alias OuterBrain.Journal.Tables.ReplyPublicationRecord
   alias OuterBrain.Persistence.{PostgresContainer, Repo, Store}
 
   @moduletag :tenant_isolation
@@ -139,73 +137,13 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
     assert [] = Store.semantic_failure_entries(@tenant, "session-semantic-1", repo: repo)
   end
 
-  test "reply publications are idempotent by dedupe key across restart replay", %{repo: repo} do
-    first =
-      reply_publication!(
-        "publication-original",
-        "causal-publication-1",
-        :final,
-        "causal-publication-1:final",
-        "Done"
-      )
-
-    same_replay =
-      reply_publication!(
-        "publication-replayed",
-        "causal-publication-1",
-        :final,
-        "causal-publication-1:final",
-        "Done"
-      )
-
-    mismatched_replay =
-      reply_publication!(
-        "publication-replayed-mismatch",
-        "causal-publication-1",
-        :final,
-        "causal-publication-1:final",
-        "Done after replay"
-      )
-
-    assert {:ok, persisted_first} =
-             Store.record_reply_publication(first, tenant_id: @tenant, repo: repo)
-
-    assert persisted_first.publication_id == "publication-original"
-
-    assert {:ok, persisted_replay} =
-             Store.record_reply_publication(same_replay, tenant_id: @tenant, repo: repo)
-
-    assert persisted_replay.publication_id == "publication-original"
-    assert persisted_replay.body_ref["body_hash"] == first.body_ref["body_hash"]
-
-    assert {:error, {:reply_publication_body_ref_mismatch, mismatch}} =
-             Store.record_reply_publication(mismatched_replay, tenant_id: @tenant, repo: repo)
-
-    assert mismatch.dedupe_key == "causal-publication-1:final"
-    assert mismatch.existing_body_hash == first.body_ref["body_hash"]
-    assert mismatch.replay_body_hash == mismatched_replay.body_ref["body_hash"]
-
-    assert [publication] = Store.reply_publications(@tenant, "causal-publication-1", repo: repo)
-    assert publication.publication_id == "publication-original"
-    assert publication.dedupe_key == "causal-publication-1:final"
-    assert publication.body_ref["body_hash"] == first.body_ref["body_hash"]
-  end
-
-  test "semantic failure and publication readback cannot cross tenants", %{repo: repo} do
+  test "semantic failure readback cannot cross tenants", %{repo: repo} do
     failure = semantic_failure!(operator_message: "Tenant-owned semantic failure.")
-
-    publication =
-      reply_publication!("publication-tenant", "causal-tenant", :final, "tenant:final", "Done")
 
     assert {:ok, ^failure} = Store.record_semantic_failure(failure, repo: repo)
 
-    assert {:ok, ^publication} =
-             Store.record_reply_publication(publication, tenant_id: @tenant, repo: repo)
-
     assert [_] = Store.semantic_failure_entries(@tenant, "session-semantic-1", repo: repo)
     assert [] = Store.semantic_failure_entries("tenant-other", "session-semantic-1", repo: repo)
-    assert [_] = Store.reply_publications(@tenant, "causal-tenant", repo: repo)
-    assert [] = Store.reply_publications("tenant-other", "causal-tenant", repo: repo)
   end
 
   defp semantic_failure!(overrides) do
@@ -225,23 +163,6 @@ defmodule OuterBrain.Persistence.SemanticFailureStoreTest do
 
     {:ok, failure} = SemanticFailure.new(attrs)
     failure
-  end
-
-  defp reply_publication!(publication_id, causal_unit_id, phase, dedupe_key, body) do
-    {:ok, reply_body} = ReplyBodyBoundary.build(causal_unit_id, phase, dedupe_key, body)
-
-    {:ok, publication} =
-      ReplyPublicationRecord.new(%{
-        publication_id: publication_id,
-        causal_unit_id: causal_unit_id,
-        phase: phase,
-        state: :published,
-        dedupe_key: dedupe_key,
-        body: reply_body.preview,
-        body_ref: reply_body.ref
-      })
-
-    publication
   end
 
   defp stop_repo_safely do

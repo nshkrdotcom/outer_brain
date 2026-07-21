@@ -9,6 +9,7 @@ Canonical durable tables include:
 - `recovery_tasks`
 - `reply_publications`
 - `outer_brain_artifact_descriptors`
+- `outer_brain_artifact_payloads`
 - `outer_brain_semantic_contexts`
 
 This package owns the canonical write path for those rows. In-memory runtime
@@ -16,15 +17,16 @@ state may mirror hot rows, but it does not own truth.
 
 Semantic failure carriers are recorded as idempotent
 `semantic_journal_entries` with `entry_type = "semantic_failure"` and payloads
-encoded through `OuterBrain.Contracts.SemanticFailure`. Reply publication
-writes are idempotent by `dedupe_key`, so restart replay can update the durable
-publication row without creating a second user-visible publication.
+encoded through `OuterBrain.Contracts.SemanticFailure`. Final reply publication
+writes are immutable and idempotent by exact `dedupe_key`/lineage agreement, so
+restart replay cannot create or mutate a second user-visible publication.
 
-Semantic-context writes atomically persist a secret-free
-`GroundPlane.Contracts.ArtifactDescriptor` and immutable
-`OuterBrain.Contracts.SemanticContextProvenance`. The PostgreSQL full-text
-index covers opaque semantic, provider, model, artifact, and provenance refs;
-it never indexes raw prompt or provider bodies.
+Prompt-context and reply-continuation writes atomically persist immutable
+content-addressed payloads, secret-free
+`GroundPlane.Contracts.ArtifactDescriptor` rows, semantic provenance, and exact
+run/turn/attempt lineage. Payload reads require tenant, reader, operation, and
+authority-packet agreement. The PostgreSQL full-text index covers only opaque
+refs; it never indexes prompt or provider bodies.
 
 Production hosts supervise
 `{OuterBrain.Persistence.DurableSupervisor, profile: :durable_redacted,

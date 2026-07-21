@@ -1,20 +1,18 @@
 defmodule OuterBrain.Persistence.StoreTest do
   use ExUnit.Case, async: false
 
+  alias Ecto.Adapters.SQL
   alias Ecto.Adapters.SQL.Sandbox
-  alias GroundPlane.Contracts.ArtifactDescriptor
   alias OuterBrain.Contracts.Lease
-  alias OuterBrain.Contracts.ReplyBodyBoundary
-  alias OuterBrain.Contracts.SemanticContextProvenance
 
   alias OuterBrain.Journal.Tables.{
     RecoveryTaskRecord,
-    ReplyPublicationRecord,
     SemanticJournalEntryRecord
   }
 
-  alias OuterBrain.Persistence.{PostgresContainer, Repo, Store}
+  alias OuterBrain.Persistence.{ArtifactAccess, PostgresContainer, Repo, Store}
   alias OuterBrain.Persistence.Schemas.RecoveryTask, as: RecoveryTaskSchema
+  alias OuterBrain.Prompting.SemanticTurnArtifacts
 
   @moduletag :tenant_isolation
   @tenant_a "tenant://outer-brain/a"
@@ -43,8 +41,21 @@ defmodule OuterBrain.Persistence.StoreTest do
     {:ok, repo: Repo, repo_config: repo_config}
   end
 
-  setup %{repo: repo} do
-    :ok = Sandbox.checkout(repo)
+  setup tags do
+    if tags[:repo_restart] do
+      Sandbox.mode(tags.repo, :auto)
+
+      on_exit(fn ->
+        if Process.whereis(tags.repo) == nil do
+          {:ok, _pid} = tags.repo.start_link(tags.repo_config)
+        end
+
+        Sandbox.mode(tags.repo, :manual)
+      end)
+    else
+      :ok = Sandbox.checkout(tags.repo)
+    end
+
     :ok
   end
 
@@ -68,136 +79,173 @@ defmodule OuterBrain.Persistence.StoreTest do
     assert Process.whereis(TemporaryRepo) == nil
   end
 
-  test "semantic provenance and its immutable object reference are transactionally durable", %{
+  test "prompt context persists immutable payloads, lineage, and exact access scope", %{
     repo: repo
   } do
-    provenance = semantic_context!("semantic-ref://context/alpha", "context-alpha")
-    descriptor = artifact_descriptor!("artifact-ref://context/alpha")
+    prompt = prompt_context!("alpha")
 
-    assert {:ok, ^provenance} =
-             Store.record_semantic_context(provenance, descriptor,
-               tenant_id: @tenant_a,
+    assert {:ok, ^prompt} = Store.record_prompt_context(prompt, tenant_id: @tenant_a, repo: repo)
+
+    assert {:ok, fetched} =
+             Store.fetch_semantic_context(@tenant_a, prompt.provenance.semantic_ref, repo: repo)
+
+    assert fetched.provenance == prompt.provenance
+    assert fetched.lineage.run_ref == prompt.run_ref
+    assert fetched.lineage.turn_ref == prompt.turn_ref
+    assert fetched.context_artifact_descriptor == prompt.context_artifact.descriptor
+    assert fetched.prompt_artifact_descriptor == prompt.prompt_artifact.descriptor
+
+    assert [indexed] =
+             Store.search_semantic_contexts(@tenant_a, "gemini-2.5-flash alpha", repo: repo)
+
+    assert indexed.provenance.semantic_ref == prompt.provenance.semantic_ref
+    assert [] = Store.search_semantic_contexts(@tenant_b, "gemini-2.5-flash", repo: repo)
+
+    assert {:ok, resolved} =
+             Store.resolve_artifact_payload(
+               prompt.prompt_artifact.descriptor.artifact_ref,
+               artifact_access(@tenant_a, "alpha"),
                repo: repo
              )
 
-    assert {:ok, %{provenance: fetched, artifact_descriptor: fetched_descriptor}} =
-             Store.fetch_semantic_context(@tenant_a, provenance.semantic_ref, repo: repo)
+    assert resolved.payload == prompt.prompt_artifact.payload
+    assert resolved.descriptor == prompt.prompt_artifact.descriptor
 
-    assert fetched == provenance
-    assert fetched_descriptor == descriptor
-
-    assert [%{provenance: indexed, artifact_descriptor: indexed_descriptor}] =
-             Store.search_semantic_contexts(@tenant_a, "provider-openai model-gpt artifact-ref",
+    assert {:error, :artifact_access_denied} =
+             Store.resolve_artifact_payload(
+               prompt.prompt_artifact.descriptor.artifact_ref,
+               %{artifact_access(@tenant_a, "alpha") | reader_ref: "reader://other"},
                repo: repo
              )
 
-    assert indexed.semantic_ref == provenance.semantic_ref
-    assert indexed_descriptor.artifact_ref == descriptor.artifact_ref
-    assert [] = Store.search_semantic_contexts(@tenant_b, "provider-openai", repo: repo)
-
-    assert {:ok, ^descriptor} =
-             Store.fetch_artifact_descriptor(@tenant_a, descriptor.artifact_ref, repo: repo)
-
-    assert :error =
-             Store.fetch_artifact_descriptor(@tenant_b, descriptor.artifact_ref, repo: repo)
-  end
-
-  test "semantic provenance replays are exact and conflicting reuse fails closed", %{repo: repo} do
-    provenance = semantic_context!("semantic-ref://context/replay", "context-replay")
-    descriptor = artifact_descriptor!("artifact-ref://context/replay")
-
-    assert {:ok, ^provenance} =
-             Store.record_semantic_context(provenance, descriptor,
-               tenant_id: @tenant_a,
-               repo: repo
-             )
-
-    assert {:ok, ^provenance} =
-             Store.record_semantic_context(provenance, descriptor,
-               tenant_id: @tenant_a,
-               repo: repo
-             )
-
-    conflicting = %{descriptor | content_digest: "sha256:" <> String.duplicate("f", 64)}
-
-    assert {:error, {:artifact_descriptor_conflict, "artifact-ref://context/replay"}} =
-             Store.record_semantic_context(provenance, conflicting,
-               tenant_id: @tenant_a,
+    assert {:error, :artifact_not_found} =
+             Store.resolve_artifact_payload(
+               prompt.prompt_artifact.descriptor.artifact_ref,
+               artifact_access(@tenant_b, "alpha"),
                repo: repo
              )
   end
 
-  test "artifact descriptor rows reject mutation at the database boundary", %{repo: repo} do
-    provenance =
-      semantic_context!("semantic-ref://context/artifact-immutable", "artifact-immutable")
+  test "exact prompt replay is idempotent and changed access scope conflicts", %{repo: repo} do
+    prompt = prompt_context!("replay")
 
-    descriptor = artifact_descriptor!("artifact-ref://context/artifact-immutable")
+    assert {:ok, ^prompt} = Store.record_prompt_context(prompt, tenant_id: @tenant_a, repo: repo)
+    assert {:ok, ^prompt} = Store.record_prompt_context(prompt, tenant_id: @tenant_a, repo: repo)
 
-    assert {:ok, ^provenance} =
-             Store.record_semantic_context(provenance, descriptor,
-               tenant_id: @tenant_a,
-               repo: repo
+    changed_artifact = %{
+      prompt.prompt_artifact
+      | allowed_reader_refs: ["reader://other"]
+    }
+
+    conflicting = %{prompt | prompt_artifact: changed_artifact}
+
+    assert {:error, {:artifact_payload_conflict, artifact_ref}} =
+             Store.record_prompt_context(conflicting, tenant_id: @tenant_a, repo: repo)
+
+    assert artifact_ref == prompt.prompt_artifact.descriptor.artifact_ref
+
+    assert %{rows: [[2]]} =
+             SQL.query!(
+               repo,
+               "SELECT count(*) FROM outer_brain_artifact_payloads WHERE authority_packet_ref = $1",
+               ["authority-packet://gemini/replay"]
              )
+  end
 
-    assert_raise Postgrex.Error, ~r/artifact descriptors are immutable/, fn ->
+  test "artifact payload rows reject mutation", %{repo: repo} do
+    prompt = prompt_context!("immutable")
+    assert {:ok, ^prompt} = Store.record_prompt_context(prompt, tenant_id: @tenant_a, repo: repo)
+
+    assert_raise Postgrex.Error, ~r/artifact payloads are immutable/, fn ->
       repo.query!(
-        "UPDATE outer_brain_artifact_descriptors SET owner_ref = 'owner-ref://other' WHERE artifact_ref = $1",
-        [descriptor.artifact_ref]
+        "UPDATE outer_brain_artifact_payloads SET payload = 'changed' WHERE artifact_ref = $1",
+        [prompt.context_artifact.descriptor.artifact_ref]
       )
     end
   end
 
-  test "semantic provenance rows reject mutation at the database boundary", %{repo: repo} do
-    provenance =
-      semantic_context!("semantic-ref://context/provenance-immutable", "provenance-immutable")
-
-    descriptor = artifact_descriptor!("artifact-ref://context/provenance-immutable")
-
-    assert {:ok, ^provenance} =
-             Store.record_semantic_context(provenance, descriptor,
-               tenant_id: @tenant_a,
-               repo: repo
-             )
+  test "semantic provenance rows reject mutation", %{repo: repo} do
+    prompt = prompt_context!("semantic-immutable")
+    assert {:ok, ^prompt} = Store.record_prompt_context(prompt, tenant_id: @tenant_a, repo: repo)
 
     assert_raise Postgrex.Error, ~r/semantic context provenance is immutable/, fn ->
       repo.query!(
-        "UPDATE outer_brain_semantic_contexts SET provider_ref = 'provider-ref://other' WHERE semantic_ref = $1",
-        [provenance.semantic_ref]
+        "UPDATE outer_brain_semantic_contexts SET provider_ref = 'provider://other' WHERE semantic_ref = $1",
+        [prompt.provenance.semantic_ref]
       )
     end
   end
 
-  test "secret-bearing artifact metadata is rejected before insertion", %{repo: repo} do
-    provenance = semantic_context!("semantic-ref://context/secret", "context-secret")
+  @tag :repo_restart
+  test "final reply, next context, and safe journal survive repository restart", %{
+    repo: repo,
+    repo_config: repo_config
+  } do
+    prompt = prompt_context!("restart")
+    continuation = reply_continuation!(prompt, "restart")
 
-    descriptor =
-      "artifact-ref://context/secret"
-      |> artifact_descriptor!()
-      |> Map.put(:provenance, %{"api_key" => "must-not-persist"})
+    assert {:ok, ^prompt} = Store.record_prompt_context(prompt, tenant_id: @tenant_a, repo: repo)
 
-    assert {:error, {:raw_credential_key_forbidden, "api_key"}} =
-             Store.record_semantic_context(provenance, descriptor,
-               tenant_id: @tenant_a,
+    assert {:ok, persisted} =
+             Store.publish_reply_continuation(continuation, tenant_id: @tenant_a, repo: repo)
+
+    assert persisted.publication.run_ref == prompt.run_ref
+    assert persisted.publication.turn_ref == prompt.turn_ref
+    assert persisted.publication.attempt_ref == continuation.attempt_ref
+
+    assert persisted.publication.reply_artifact_ref ==
+             continuation.reply_artifact.descriptor.artifact_ref
+
+    assert persisted.publication.next_semantic_ref == continuation.next_provenance.semantic_ref
+
+    assert {:ok, ^persisted} =
+             Store.publish_reply_continuation(continuation, tenant_id: @tenant_a, repo: repo)
+
+    stop_repo_safely()
+    {:ok, _pid} = Repo.start_link(repo_config)
+
+    assert {:ok, next_context} =
+             Store.fetch_semantic_context(
+               @tenant_a,
+               continuation.next_provenance.semantic_ref,
                repo: repo
              )
 
-    assert :error =
-             Store.fetch_artifact_descriptor(@tenant_a, descriptor.artifact_ref, repo: repo)
+    assert next_context.lineage.previous_semantic_ref == prompt.provenance.semantic_ref
+
+    assert latest = Store.latest_publication(@tenant_a, prompt.turn_ref, repo: repo)
+    assert latest.attempt_ref == continuation.attempt_ref
+    assert latest.next_semantic_ref == continuation.next_provenance.semantic_ref
+
+    assert [journal_entry] = Store.journal_entries(@tenant_a, prompt.run_ref, repo: repo)
+    assert journal_entry.entry_type == "assistant_reply_published"
+    refute inspect(journal_entry.payload) =~ "Restart-safe assistant reply"
+
+    assert {:ok, resolved_reply} =
+             Store.resolve_artifact_payload(
+               continuation.reply_artifact.descriptor.artifact_ref,
+               artifact_access(@tenant_a, "restart"),
+               repo: repo
+             )
+
+    assert resolved_reply.payload == "Restart-safe assistant reply"
   end
 
-  test "signed object URLs are rejected in favor of opaque location refs", %{repo: repo} do
-    provenance = semantic_context!("semantic-ref://context/signed-url", "context-signed-url")
+  test "secret-bearing assistant replies are rejected before persistence", %{repo: repo} do
+    prompt = prompt_context!("secret-reply")
+    assert {:ok, ^prompt} = Store.record_prompt_context(prompt, tenant_id: @tenant_a, repo: repo)
 
-    descriptor =
-      "artifact-ref://context/signed-url"
-      |> artifact_descriptor!()
-      |> Map.put(:location_ref, "https://objects.example/context?X-Amz-Signature=secret")
+    assert {:error, :invalid_reply_continuation} =
+             SemanticTurnArtifacts.prepare_reply(prompt, %{
+               attempt_ref: "attempt://gemini/secret-reply",
+               assistant_reply: "api_key=must-not-persist",
+               dedupe_key: "secret-reply:final",
+               published_at: ~U[2026-07-21 08:00:00Z],
+               allowed_reader_refs: ["reader://synapse"],
+               allowed_operation_refs: ["operation://synapse/read"]
+             })
 
-    assert {:error, :non_opaque_artifact_location_ref} =
-             Store.record_semantic_context(provenance, descriptor,
-               tenant_id: @tenant_a,
-               repo: repo
-             )
+    assert [] = Store.reply_publications(@tenant_a, prompt.turn_ref, repo: repo)
   end
 
   test "lease acquisition persists fenced session ownership and expiry replacement", %{repo: repo} do
@@ -297,41 +345,14 @@ defmodule OuterBrain.Persistence.StoreTest do
     assert [] = Store.journal_entries(@tenant_a, "session_alpha", repo: repo)
   end
 
-  test "restart-authority inputs survive durable recovery task and publication writes", %{
-    repo: repo
-  } do
+  test "restart-authority inputs preserve durable recovery tasks", %{repo: repo} do
     recovery_task =
       recovery_task!("recovery_1", "session_alpha", :ambiguous_submission, :pending)
-
-    provisional =
-      reply_publication!(
-        "publication_1",
-        "causal_1",
-        :provisional,
-        :published,
-        "causal_1:p",
-        "Working"
-      )
-
-    final =
-      reply_publication!("publication_2", "causal_1", :final, :published, "causal_1:f", "Done")
 
     assert {:ok, ^recovery_task} =
              Store.record_recovery_task(recovery_task, tenant_id: @tenant_a, repo: repo)
 
-    assert {:ok, ^provisional} =
-             Store.record_reply_publication(provisional, tenant_id: @tenant_a, repo: repo)
-
-    assert {:ok, ^final} = Store.record_reply_publication(final, tenant_id: @tenant_a, repo: repo)
-
     assert [^recovery_task] = Store.pending_recovery_tasks(@tenant_a, "session_alpha", repo: repo)
-    assert :final == Store.latest_publication_phase(@tenant_a, "causal_1", repo: repo)
-
-    assert [persisted_provisional, persisted_final] =
-             Store.reply_publications(@tenant_a, "causal_1", repo: repo)
-
-    assert persisted_provisional.persistence_posture.raw_prompt_persistence? == false
-    assert persisted_final.persistence_posture.raw_provider_payload_persistence? == false
   end
 
   test "pending recovery tasks reject unknown persisted reasons", %{repo: repo} do
@@ -351,7 +372,7 @@ defmodule OuterBrain.Persistence.StoreTest do
     assert String.contains?(Exception.message(error), "unknown recovery task reason")
   end
 
-  test "tenant scope is part of every durable session and publication query", %{repo: repo} do
+  test "tenant scope is part of every durable session query", %{repo: repo} do
     now = DateTime.from_unix!(1_800_000_500)
 
     tenant_a_lease =
@@ -377,32 +398,16 @@ defmodule OuterBrain.Persistence.StoreTest do
     recovery_task =
       recovery_task!("recovery_shared", "session_shared", :ambiguous_submission, :pending)
 
-    publication =
-      reply_publication!(
-        "publication_shared",
-        "causal_shared",
-        :final,
-        :published,
-        "shared:final",
-        "Done"
-      )
-
     assert {:ok, ^journal_entry} =
              Store.append_semantic_journal_entry(journal_entry, tenant_id: @tenant_a, repo: repo)
 
     assert {:ok, ^recovery_task} =
              Store.record_recovery_task(recovery_task, tenant_id: @tenant_a, repo: repo)
 
-    assert {:ok, ^publication} =
-             Store.record_reply_publication(publication, tenant_id: @tenant_a, repo: repo)
-
     assert [_] = Store.journal_entries(@tenant_a, "session_shared", repo: repo)
     assert [] = Store.journal_entries(@tenant_b, "session_shared", repo: repo)
     assert [_] = Store.pending_recovery_tasks(@tenant_a, "session_shared", repo: repo)
     assert [] = Store.pending_recovery_tasks(@tenant_b, "session_shared", repo: repo)
-    assert [_] = Store.reply_publications(@tenant_a, "causal_shared", repo: repo)
-    assert [] = Store.reply_publications(@tenant_b, "causal_shared", repo: repo)
-    assert Store.latest_publication(@tenant_b, "causal_shared", repo: repo) == nil
   end
 
   defp lease!(session_id, holder, lease_id, epoch, expires_at) do
@@ -444,71 +449,79 @@ defmodule OuterBrain.Persistence.StoreTest do
     task
   end
 
-  defp reply_publication!(publication_id, causal_unit_id, phase, state, dedupe_key, body) do
-    {:ok, reply_body} = ReplyBodyBoundary.build(causal_unit_id, phase, dedupe_key, body)
+  defp prompt_context!(suffix, overrides \\ %{}) do
+    attrs =
+      Map.merge(
+        %{
+          tenant_ref: @tenant_a,
+          installation_ref: "installation://synapse/#{suffix}",
+          workspace_ref: "workspace://synapse/#{suffix}",
+          project_ref: "project://synapse/#{suffix}",
+          environment_ref: "environment://synapse/test",
+          authority_packet_ref: "authority-packet://gemini/#{suffix}",
+          permission_decision_ref: "decision://citadel/#{suffix}",
+          idempotency_key: "idempotency://synapse/#{suffix}",
+          trace_id: "trace://synapse/#{suffix}",
+          correlation_id: "correlation://synapse/#{suffix}",
+          release_manifest_ref: "release://nshkr/p03",
+          input_claim_check_ref: "claim-check://synapse/#{suffix}/input",
+          output_claim_check_ref: "claim-check://synapse/#{suffix}/output",
+          redaction_policy_ref: "redaction-policy://nshkr/p03",
+          normalizer_version: "outer-brain-normalizer-v1",
+          run_ref: "run://synapse/#{suffix}",
+          turn_ref: "turn://synapse/#{suffix}/1",
+          model_profile_ref: "model-profile://nshkr/gemini-2.5-flash",
+          provider_ref: "provider://google/gemini",
+          model_ref: "model://google/gemini-2.5-flash",
+          producing_operation_ref: "operation://outer-brain/context/#{suffix}",
+          system_actor_ref: "actor://nshkr/outer-brain",
+          source_artifacts: [
+            %{
+              artifact_ref: "artifact://synapse/#{suffix}/system",
+              content_digest: "sha256:" <> String.duplicate("1", 64),
+              role: "system_instruction"
+            },
+            %{
+              artifact_ref: "artifact://synapse/#{suffix}/user",
+              content_digest: "sha256:" <> String.duplicate("2", 64),
+              role: "user_input"
+            }
+          ],
+          memory_snapshot_refs: ["memory-snapshot://outer-brain/#{suffix}"],
+          allowed_reader_refs: ["reader://synapse"],
+          allowed_operation_refs: ["operation://synapse/read"]
+        },
+        Map.new(overrides)
+      )
 
-    {:ok, publication} =
-      ReplyPublicationRecord.new(%{
-        publication_id: publication_id,
-        causal_unit_id: causal_unit_id,
-        phase: phase,
-        state: state,
-        dedupe_key: dedupe_key,
-        body: reply_body.preview,
-        body_ref: reply_body.ref
-      })
-
-    publication
+    {:ok, prompt} = SemanticTurnArtifacts.prepare_prompt(attrs)
+    prompt
   end
 
-  defp semantic_context!(semantic_ref, suffix) do
-    {:ok, provenance} =
-      SemanticContextProvenance.new(%{
-        tenant_ref: @tenant_a,
-        installation_ref: "installation-ref://#{suffix}",
-        workspace_ref: "workspace-ref://#{suffix}",
-        project_ref: "project-ref://#{suffix}",
-        environment_ref: "environment-ref://#{suffix}",
-        resource_ref: "resource-ref://#{suffix}",
-        authority_packet_ref: "authority-packet-ref://#{suffix}",
-        permission_decision_ref: "permission-decision-ref://#{suffix}",
-        idempotency_key: "idempotency-key://#{suffix}",
-        trace_id: "trace-id://#{suffix}",
-        correlation_id: "correlation-id://#{suffix}",
-        release_manifest_ref: "release-manifest-ref://#{suffix}",
-        system_actor_ref: "system-actor-ref://outer-brain",
-        semantic_ref: semantic_ref,
-        provider_ref: "provider-openai",
-        model_ref: "model-gpt",
-        prompt_hash: "sha256:" <> String.duplicate("1", 64),
-        context_hash: "sha256:" <> String.duplicate("2", 64),
-        input_claim_check_ref: "claim-check-ref://#{suffix}/input",
-        output_claim_check_ref: "claim-check-ref://#{suffix}/output",
-        provenance_refs: ["provenance-ref://#{suffix}"],
-        normalizer_version: "normalizer-v1",
-        redaction_policy_ref: "redaction-policy-ref://v1"
-      })
+  defp reply_continuation!(prompt, suffix, overrides \\ %{}) do
+    attrs =
+      Map.merge(
+        %{
+          attempt_ref: "attempt://jido/gemini/#{suffix}",
+          assistant_reply: "Restart-safe assistant reply",
+          dedupe_key: "#{prompt.turn_ref}:final",
+          published_at: ~U[2026-07-21 08:00:00Z],
+          allowed_reader_refs: ["reader://synapse"],
+          allowed_operation_refs: ["operation://synapse/read"]
+        },
+        Map.new(overrides)
+      )
 
-    provenance
+    {:ok, continuation} = SemanticTurnArtifacts.prepare_reply(prompt, attrs)
+    continuation
   end
 
-  defp artifact_descriptor!(artifact_ref) do
-    ArtifactDescriptor.new!(%{
-      artifact_ref: artifact_ref,
-      tenant_ref: @tenant_a,
-      owner_ref: "owner-ref://outer-brain",
-      content_digest: "sha256:" <> String.duplicate("0", 64),
-      size_bytes: 128,
-      media_type: "application/vnd.outer-brain.semantic-context+json",
-      schema_ref: "schema-ref://outer-brain/semantic-context/v1",
-      schema_version: 1,
-      classification: "confidential",
-      provenance: %{"normalizer_ref" => "normalizer-ref://v1"},
-      causal_parent_refs: ["causal-parent-ref://wake/1"],
-      producing_operation_ref: "operation-ref://semantic-context/1",
-      retention: %{"policy_ref" => "retention-policy-ref://semantic-context"},
-      deletion_state: "active",
-      location_ref: "object-ref://outer-brain/semantic-context/1"
+  defp artifact_access(tenant_ref, suffix) do
+    ArtifactAccess.new!(%{
+      tenant_ref: tenant_ref,
+      reader_ref: "reader://synapse",
+      operation_ref: "operation://synapse/read",
+      authority_packet_ref: "authority-packet://gemini/#{suffix}"
     })
   end
 

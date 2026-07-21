@@ -39,6 +39,7 @@ defmodule OuterBrain.Persistence.MixProject do
       DependencySources.dep(:ground_plane_contracts, @repo_root),
       {:outer_brain_contracts, path: "../outer_brain_contracts"},
       {:outer_brain_journal, path: "../outer_brain_journal"},
+      {:outer_brain_prompting, path: "../outer_brain_prompting"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.40.1", only: :dev, runtime: false}

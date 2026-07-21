@@ -7,6 +7,7 @@ defmodule OuterBrain.Persistence.Store do
   `OuterBrain.Persistence`.
   """
 
+  alias GroundPlane.Boundary.Codec
   alias GroundPlane.Contracts.ArtifactDescriptor
   alias OuterBrain.Contracts.{Lease, SemanticContextProvenance, SemanticFailure}
 
@@ -17,7 +18,9 @@ defmodule OuterBrain.Persistence.Store do
   }
 
   alias OuterBrain.Persistence.{
+    ArtifactAccess,
     ArtifactDescriptorRepository,
+    ArtifactPayloadRepository,
     JournalRepository,
     LeaseRepository,
     ProfilePolicy,
@@ -28,43 +31,107 @@ defmodule OuterBrain.Persistence.Store do
     TenantOptions
   }
 
+  alias OuterBrain.Prompting.ImmutableArtifact
+
+  alias OuterBrain.Prompting.SemanticTurnArtifacts.{
+    PromptContext,
+    ReplyContinuation
+  }
+
   @spec preflight(keyword() | map()) :: :ok | {:error, term()}
   def preflight(opts \\ []), do: ProfilePolicy.preflight(opts)
 
   @doc """
-  Atomically records immutable artifact metadata and the semantic provenance
-  fact that refers to it.
+  Atomically records the immutable context and prompt-manifest artifacts plus
+  their semantic provenance. No metadata-only production route exists.
   """
-  @spec record_semantic_context(
-          SemanticContextProvenance.t(),
-          ArtifactDescriptor.t(),
-          keyword()
-        ) :: {:ok, SemanticContextProvenance.t()} | {:error, term()}
-  def record_semantic_context(
-        %SemanticContextProvenance{} = provenance,
-        %ArtifactDescriptor{} = descriptor,
-        opts \\ []
-      ) do
+  @spec record_prompt_context(PromptContext.t(), keyword()) ::
+          {:ok, PromptContext.t()} | {:error, term()}
+  def record_prompt_context(%PromptContext{} = prompt, opts \\ []) do
     repo = TenantOptions.repo(opts)
     tenant_ref = TenantOptions.tenant_id!(opts)
 
     case repo.transaction(fn ->
-           with {:ok, _descriptor} <-
-                  ArtifactDescriptorRepository.record(repo, tenant_ref, descriptor),
+           with :ok <- require_prompt_tenant(prompt, tenant_ref),
+                {:ok, _context_artifact} <-
+                  record_artifact(repo, tenant_ref, prompt.context_artifact),
+                {:ok, _prompt_artifact} <-
+                  record_artifact(repo, tenant_ref, prompt.prompt_artifact),
                 {:ok, provenance} <-
                   SemanticContextRepository.record(
                     repo,
                     tenant_ref,
-                    provenance,
-                    descriptor.artifact_ref
+                    prompt.provenance,
+                    prompt_lineage(prompt)
                   ) do
-             provenance
+             %{prompt | provenance: provenance}
            else
              {:error, reason} -> repo.rollback(reason)
            end
          end) do
-      {:ok, provenance} -> {:ok, provenance}
+      {:ok, %PromptContext{} = persisted} -> {:ok, persisted}
       {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
+  Atomically publishes a normalized final assistant reply, the next immutable
+  context artifact, its semantic provenance, the publication row, and a safe
+  journal fact.
+  """
+  @spec publish_reply_continuation(ReplyContinuation.t(), keyword()) ::
+          {:ok, ReplyContinuation.t()} | {:error, term()}
+  def publish_reply_continuation(%ReplyContinuation{} = continuation, opts \\ []) do
+    repo = TenantOptions.repo(opts)
+    tenant_ref = TenantOptions.tenant_id!(opts)
+
+    case repo.transaction(fn ->
+           with :ok <- require_continuation_tenant(continuation, tenant_ref),
+                {:ok, previous} <-
+                  fetch_required_semantic(repo, tenant_ref, continuation.previous_semantic_ref),
+                :ok <- validate_previous_prompt(previous, continuation),
+                {:ok, _reply_artifact} <-
+                  record_artifact(repo, tenant_ref, continuation.reply_artifact),
+                {:ok, _next_context_artifact} <-
+                  record_artifact(repo, tenant_ref, continuation.next_context_artifact),
+                {:ok, next_provenance} <-
+                  SemanticContextRepository.record(
+                    repo,
+                    tenant_ref,
+                    continuation.next_provenance,
+                    continuation_lineage(continuation)
+                  ),
+                publication <-
+                  ReplyPublicationRepository.record_in_transaction(
+                    repo,
+                    tenant_ref,
+                    continuation.publication,
+                    publication_lineage(continuation)
+                  ),
+                {:ok, _journal_entry} <-
+                  JournalRepository.append(
+                    repo,
+                    tenant_ref,
+                    publication_journal_entry(continuation, publication)
+                  ) do
+             %{continuation | publication: publication, next_provenance: next_provenance}
+           else
+             {:error, reason} -> repo.rollback(reason)
+             :error -> repo.rollback(:previous_semantic_context_not_found)
+           end
+         end) do
+      {:ok, %ReplyContinuation{} = persisted} -> {:ok, persisted}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @spec resolve_artifact_payload(String.t(), ArtifactAccess.t() | map() | keyword(), keyword()) ::
+          {:ok, %{descriptor: ArtifactDescriptor.t(), payload: binary()}} | {:error, term()}
+  def resolve_artifact_payload(artifact_ref, access, opts \\ []) when is_binary(artifact_ref) do
+    with {:ok, access} <- ArtifactAccess.new(access) do
+      opts
+      |> TenantOptions.repo()
+      |> ArtifactPayloadRepository.resolve(artifact_ref, access)
     end
   end
 
@@ -143,14 +210,6 @@ defmodule OuterBrain.Persistence.Store do
     |> RecoveryTaskRepository.pending(tenant_id, session_id)
   end
 
-  @spec record_reply_publication(ReplyPublicationRecord.t(), keyword()) ::
-          {:ok, ReplyPublicationRecord.t()} | {:error, Ecto.Changeset.t() | term()}
-  def record_reply_publication(%ReplyPublicationRecord{} = publication, opts \\ []) do
-    opts
-    |> TenantOptions.repo()
-    |> ReplyPublicationRepository.record(TenantOptions.tenant_id!(opts), publication)
-  end
-
   @spec reply_publications(String.t(), String.t(), keyword()) :: [ReplyPublicationRecord.t()]
   def reply_publications(tenant_id, causal_unit_id, opts \\ [])
       when is_binary(tenant_id) and is_binary(causal_unit_id) do
@@ -189,5 +248,111 @@ defmodule OuterBrain.Persistence.Store do
     opts
     |> TenantOptions.repo()
     |> SemanticFailureRepository.list(tenant_id, session_id)
+  end
+
+  defp record_artifact(repo, tenant_ref, %ImmutableArtifact{} = artifact) do
+    with {:ok, _descriptor} <-
+           ArtifactDescriptorRepository.record(repo, tenant_ref, artifact.descriptor),
+         {:ok, artifact} <- ArtifactPayloadRepository.record(repo, tenant_ref, artifact) do
+      {:ok, artifact}
+    end
+  end
+
+  defp prompt_lineage(prompt) do
+    %{
+      run_ref: prompt.run_ref,
+      turn_ref: prompt.turn_ref,
+      context_artifact_ref: prompt.context_artifact.descriptor.artifact_ref,
+      prompt_artifact_ref: prompt.prompt_artifact.descriptor.artifact_ref,
+      model_profile_ref: prompt.model_profile_ref,
+      memory_snapshot_refs: prompt.memory_snapshot_refs,
+      previous_semantic_ref: prompt.previous_semantic_ref
+    }
+  end
+
+  defp continuation_lineage(continuation) do
+    %{
+      run_ref: continuation.run_ref,
+      turn_ref: continuation.turn_ref,
+      context_artifact_ref: continuation.next_context_artifact.descriptor.artifact_ref,
+      prompt_artifact_ref: continuation.prompt_artifact_ref,
+      model_profile_ref: continuation.model_profile_ref,
+      memory_snapshot_refs: continuation.memory_snapshot_refs,
+      previous_semantic_ref: continuation.previous_semantic_ref
+    }
+  end
+
+  defp publication_lineage(continuation) do
+    %{
+      run_ref: continuation.run_ref,
+      turn_ref: continuation.turn_ref,
+      attempt_ref: continuation.attempt_ref,
+      reply_artifact_ref: continuation.reply_artifact.descriptor.artifact_ref,
+      next_semantic_ref: continuation.next_provenance.semantic_ref
+    }
+  end
+
+  defp publication_journal_entry(continuation, publication) do
+    entry_id =
+      Codec.digest(%{
+        "publication_id" => publication.publication_id,
+        "next_semantic_ref" => continuation.next_provenance.semantic_ref
+      })
+      |> String.replace_prefix("sha256:", "journal-entry://outer-brain/")
+
+    {:ok, entry} =
+      SemanticJournalEntryRecord.new(%{
+        entry_id: entry_id,
+        session_id: continuation.run_ref,
+        causal_unit_id: continuation.turn_ref,
+        entry_type: "assistant_reply_published",
+        recorded_at: continuation.published_at,
+        payload: %{
+          "publication_id" => publication.publication_id,
+          "attempt_ref" => continuation.attempt_ref,
+          "prompt_artifact_ref" => continuation.prompt_artifact_ref,
+          "reply_artifact_ref" => continuation.reply_artifact.descriptor.artifact_ref,
+          "next_context_artifact_ref" =>
+            continuation.next_context_artifact.descriptor.artifact_ref,
+          "next_semantic_ref" => continuation.next_provenance.semantic_ref
+        }
+      })
+
+    entry
+  end
+
+  defp require_prompt_tenant(prompt, tenant_ref) do
+    if prompt.provenance.tenant_ref == tenant_ref,
+      do: :ok,
+      else: {:error, :prompt_context_tenant_mismatch}
+  end
+
+  defp require_continuation_tenant(continuation, tenant_ref) do
+    if continuation.next_provenance.tenant_ref == tenant_ref,
+      do: :ok,
+      else: {:error, :reply_continuation_tenant_mismatch}
+  end
+
+  defp fetch_required_semantic(repo, tenant_ref, semantic_ref) do
+    case SemanticContextRepository.fetch(repo, tenant_ref, semantic_ref) do
+      {:ok, record} -> {:ok, record}
+      :error -> {:error, :previous_semantic_context_not_found}
+    end
+  end
+
+  defp validate_previous_prompt(previous, continuation) do
+    cond do
+      previous.lineage.prompt_artifact_ref != continuation.prompt_artifact_ref ->
+        {:error, :reply_prompt_artifact_mismatch}
+
+      previous.lineage.run_ref != continuation.run_ref ->
+        {:error, :reply_run_ref_mismatch}
+
+      previous.lineage.turn_ref != continuation.turn_ref ->
+        {:error, :reply_turn_ref_mismatch}
+
+      true ->
+        :ok
+    end
   end
 end

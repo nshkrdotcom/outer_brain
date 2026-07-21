@@ -15,6 +15,11 @@ defmodule OuterBrain.Persistence.Schemas.ReplyPublication do
     field(:dedupe_key, :string)
     field(:body, :string)
     field(:body_ref, :map)
+    field(:run_ref, :string)
+    field(:turn_ref, :string)
+    field(:attempt_ref, :string)
+    field(:reply_artifact_ref, :string)
+    field(:next_semantic_ref, :string)
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -29,7 +34,12 @@ defmodule OuterBrain.Persistence.Schemas.ReplyPublication do
       :state,
       :dedupe_key,
       :body,
-      :body_ref
+      :body_ref,
+      :run_ref,
+      :turn_ref,
+      :attempt_ref,
+      :reply_artifact_ref,
+      :next_semantic_ref
     ])
     |> validate_required([
       :publication_id,
@@ -39,7 +49,12 @@ defmodule OuterBrain.Persistence.Schemas.ReplyPublication do
       :state,
       :dedupe_key,
       :body,
-      :body_ref
+      :body_ref,
+      :run_ref,
+      :turn_ref,
+      :attempt_ref,
+      :reply_artifact_ref,
+      :next_semantic_ref
     ])
     |> unique_constraint([:tenant_id, :dedupe_key])
   end

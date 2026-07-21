@@ -66,6 +66,14 @@ defmodule OuterBrain.Persistence.StoreBoundaryTest do
   test "reply publication mapper owns schema attributes without mutating domain record" do
     publication = reply_publication!("publication_mapper", "causal_mapper", :final, "Mapped")
 
+    lineage = %{
+      run_ref: "run://mapper",
+      turn_ref: "turn://mapper/1",
+      attempt_ref: "attempt://mapper/1",
+      reply_artifact_ref: "artifact://mapper/reply",
+      next_semantic_ref: "semantic://mapper/next"
+    }
+
     assert %{
              publication_id: "publication_mapper",
              tenant_id: @tenant,
@@ -74,8 +82,13 @@ defmodule OuterBrain.Persistence.StoreBoundaryTest do
              state: :published,
              dedupe_key: "causal_mapper:final",
              body: "Mapped",
-             body_ref: body_ref
-           } = ReplyPublicationMapper.to_schema_attrs(@tenant, publication)
+             body_ref: body_ref,
+             run_ref: "run://mapper",
+             turn_ref: "turn://mapper/1",
+             attempt_ref: "attempt://mapper/1",
+             reply_artifact_ref: "artifact://mapper/reply",
+             next_semantic_ref: "semantic://mapper/next"
+           } = ReplyPublicationMapper.to_schema_attrs(@tenant, publication, lineage)
 
     assert body_ref == publication.body_ref
     assert publication.body == "Mapped"

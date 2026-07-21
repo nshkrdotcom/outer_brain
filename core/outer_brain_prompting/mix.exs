@@ -1,5 +1,11 @@
+unless Code.ensure_loaded?(DependencySources) do
+  Code.require_file("../../build_support/dependency_sources.exs", __DIR__)
+end
+
 defmodule OuterBrain.Prompting.MixProject do
   use Mix.Project
+
+  @repo_root Path.expand("../..", __DIR__)
 
   def project do
     [
@@ -28,6 +34,7 @@ defmodule OuterBrain.Prompting.MixProject do
 
   defp deps do
     [
+      DependencySources.dep(:ground_plane_contracts, @repo_root),
       {:outer_brain_context_abi, path: "../context_abi"},
       {:outer_brain_contracts, path: "../outer_brain_contracts"},
       {:outer_brain_core, path: "../outer_brain_core"},
