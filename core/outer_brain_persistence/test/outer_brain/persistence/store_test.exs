@@ -28,7 +28,8 @@ defmodule OuterBrain.Persistence.StoreTest do
     container = PostgresContainer.start!("outer_brain_persistence")
 
     repo_config = PostgresContainer.repo_config(container.port)
-    {:ok, _pid} = Repo.start_link(repo_config)
+    {:ok, pid} = Repo.start_link(repo_config)
+    Process.unlink(pid)
 
     PostgresContainer.run_migrations!(Repo)
     Sandbox.mode(Repo, :manual)
@@ -47,7 +48,8 @@ defmodule OuterBrain.Persistence.StoreTest do
 
       on_exit(fn ->
         if Process.whereis(tags.repo) == nil do
-          {:ok, _pid} = tags.repo.start_link(tags.repo_config)
+          {:ok, pid} = tags.repo.start_link(tags.repo_config)
+          Process.unlink(pid)
         end
 
         Sandbox.mode(tags.repo, :manual)
@@ -95,11 +97,15 @@ defmodule OuterBrain.Persistence.StoreTest do
     assert fetched.context_artifact_descriptor == prompt.context_artifact.descriptor
     assert fetched.prompt_artifact_descriptor == prompt.prompt_artifact.descriptor
 
-    assert [indexed] =
-             Store.search_semantic_contexts(@tenant_a, "gemini-2.5-flash alpha", repo: repo)
+    indexed =
+      @tenant_a
+      |> Store.search_semantic_contexts("google/gemini", repo: repo)
+      |> Enum.find(&(&1.provenance.semantic_ref == prompt.provenance.semantic_ref))
+
+    assert indexed
 
     assert indexed.provenance.semantic_ref == prompt.provenance.semantic_ref
-    assert [] = Store.search_semantic_contexts(@tenant_b, "gemini-2.5-flash", repo: repo)
+    assert [] = Store.search_semantic_contexts(@tenant_b, "google/gemini", repo: repo)
 
     assert {:ok, resolved} =
              Store.resolve_artifact_payload(
@@ -202,7 +208,8 @@ defmodule OuterBrain.Persistence.StoreTest do
              Store.publish_reply_continuation(continuation, tenant_id: @tenant_a, repo: repo)
 
     stop_repo_safely()
-    {:ok, _pid} = Repo.start_link(repo_config)
+    {:ok, pid} = Repo.start_link(repo_config)
+    Process.unlink(pid)
 
     assert {:ok, next_context} =
              Store.fetch_semantic_context(

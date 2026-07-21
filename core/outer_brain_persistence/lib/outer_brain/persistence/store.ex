@@ -9,7 +9,7 @@ defmodule OuterBrain.Persistence.Store do
 
   alias GroundPlane.Boundary.Codec
   alias GroundPlane.Contracts.ArtifactDescriptor
-  alias OuterBrain.Contracts.{Lease, SemanticContextProvenance, SemanticFailure}
+  alias OuterBrain.Contracts.{Lease, SemanticFailure}
 
   alias OuterBrain.Journal.Tables.{
     RecoveryTaskRecord,
